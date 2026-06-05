@@ -61,14 +61,6 @@ workflows:
       - /tmp/xcodebuild_logs/*.log
       - $HOME/Library/Developer/Xcode/DerivedData/**/Build/**/*.dSYM
 
-    publishing:
-      email:
-        recipients:
-          - wcwatson22@gmail.com
-        notify:
-          success: true
-          failure: true
-
   # ── Android Play Store build ───────────────────────────────────────────────
   android-release:
     name: Android — Play Store
@@ -100,10 +92,3 @@ workflows:
       - android/app/build/outputs/**/*.aab
       - android/app/build/outputs/**/*.apk
 
-    publishing:
-      email:
-        recipients:
-          - wcwatson22@gmail.com
-        notify:
-          success: true
-          failure: true
