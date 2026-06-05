@@ -18,7 +18,7 @@ workflows:
         # Same key as Clarity — reuse the same ASC_PRIVATE_KEY_B64 env var in Codemagic dashboard
         ASC_PRIVATE_KEY_B64: $ASC_PRIVATE_KEY_B64
       node: 22.13.0
-      xcode: 26
+      xcode: 16.2
 
     scripts:
       - name: Install Node dependencies
