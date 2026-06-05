@@ -22,7 +22,7 @@ workflows:
 
     scripts:
       - name: Install Node dependencies
-        script: npm ci
+        script: npm install --legacy-peer-deps
 
       - name: Run Expo prebuild (generates native iOS project)
         script: npx expo prebuild --platform ios --clean
@@ -77,7 +77,7 @@ workflows:
 
     scripts:
       - name: Install Node dependencies
-        script: npm ci
+        script: npm install --legacy-peer-deps
 
       - name: Run Expo prebuild (generates native Android project)
         script: npx expo prebuild --platform android --clean
