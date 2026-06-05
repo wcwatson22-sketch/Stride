@@ -29,7 +29,7 @@ workflows:
 
       - name: Set build number
         script: |
-          cd ios/Stride
+          cd ios
           xcrun agvtool new-version -all $BUILD_NUMBER
 
       - name: Set up code signing
