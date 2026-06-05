@@ -8,10 +8,10 @@
     "userInterfaceStyle": "light",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.stride.habittracker"
+      "bundleIdentifier": "com.strideapp.habittracker"
     },
     "android": {
-      "package": "com.stride.habittracker",
+      "package": "com.strideapp.habittracker",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/android-icon-foreground.png",
