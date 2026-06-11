@@ -29,16 +29,45 @@ export function getPeriodStart(habit: Habit, now: Date = new Date()): Date {
   }
 }
 
+/** Exclusive upper bound for a habit's current period. */
+export function getPeriodEnd(habit: Habit, now: Date = new Date()): Date {
+  switch (habit.frequencyType) {
+    case 'daily': {
+      const d = getStartOfDay(now);
+      d.setDate(d.getDate() + 1);
+      return d;
+    }
+    case 'weekly': {
+      const d = getStartOfWeek(now);
+      d.setDate(d.getDate() + 7);
+      return d;
+    }
+    case 'monthly': {
+      const d = getStartOfMonth(now);
+      d.setMonth(d.getMonth() + 1);
+      return d;
+    }
+  }
+}
+
+/**
+ * Count completions for a habit within a specific period only.
+ * Uses both a start AND end boundary so past-period checks don't bleed
+ * into completions that were recorded later.
+ */
 export function getCompletedCountForPeriod(
   habit: Habit,
   completions: HabitCompletion[],
   now: Date = new Date()
 ): number {
   const periodStart = getPeriodStart(habit, now);
+  const periodEnd = getPeriodEnd(habit, now);
   return completions
     .filter(
       (c) =>
-        c.habitId === habit.id && new Date(c.completedAt) >= periodStart
+        c.habitId === habit.id &&
+        new Date(c.completedAt) >= periodStart &&
+        new Date(c.completedAt) < periodEnd
     )
     .reduce((sum, c) => sum + c.count, 0);
 }
@@ -49,7 +78,7 @@ export function getHabitProgress(
   now: Date = new Date()
 ): { completed: number; target: number; percentage: number; done: boolean } {
   const completed = getCompletedCountForPeriod(habit, completions, now);
-  const target = habit.targetCount;
+  const target = Math.max(1, habit.targetCount); // defensive: never allow 0 target
   const percentage = Math.min(1, completed / target);
   return { completed, target, percentage, done: completed >= target };
 }
@@ -87,7 +116,7 @@ export function getWeeklyConsistency(
 
   for (const habit of activeHabits) {
     if (habit.frequencyType === 'daily') {
-      // Check each of the last 7 days
+      // Check each of the last 7 days with a proper per-day window
       for (let i = 0; i < 7; i++) {
         const day = new Date(now);
         day.setDate(day.getDate() - i);
@@ -105,6 +134,11 @@ export function getWeeklyConsistency(
   return totalPossible > 0 ? totalCompleted / totalPossible : 0;
 }
 
+/**
+ * Consecutive days where every active daily habit met its target.
+ * A day only counts if there were actual completion records (completed > 0)
+ * AND the target was met (completed >= target) AND the target is positive.
+ */
 export function getCurrentStreak(
   habits: Habit[],
   completions: HabitCompletion[],
@@ -112,14 +146,16 @@ export function getCurrentStreak(
 ): number {
   const dailyHabits = habits.filter((h) => h.isActive && h.frequencyType === 'daily');
   if (dailyHabits.length === 0) return 0;
+  if (completions.length === 0) return 0; // no completions = no streak
 
   let streak = 0;
   let day = new Date(now);
 
   for (let i = 0; i < 365; i++) {
     const allDone = dailyHabits.every((habit) => {
-      const { done } = getHabitProgress(habit, completions, day);
-      return done;
+      const { completed, target } = getHabitProgress(habit, completions, day);
+      // Requires actual completions, a positive target, and meeting the target.
+      return target > 0 && completed > 0 && completed >= target;
     });
     if (allDone) {
       streak++;
@@ -132,9 +168,49 @@ export function getCurrentStreak(
   return streak;
 }
 
+/** Motivational label based on weekly consistency (0–1). */
+export function getMotivationalLabel(consistency: number): string {
+  if (consistency >= 0.8) return 'Strong Week';
+  if (consistency >= 0.5) return 'Building Momentum';
+  if (consistency > 0)   return 'Needs Attention';
+  return 'Start Today';
+}
+
+/** Human-readable period label for a habit's frequency. */
+export function periodLabel(habit: Habit): string {
+  switch (habit.frequencyType) {
+    case 'daily':   return 'today';
+    case 'weekly':  return 'this week';
+    case 'monthly': return 'this month';
+  }
+}
+
+/** Human-readable frequency summary for a habit. */
 export function frequencyLabel(habit: Habit): string {
   const freq = habit.frequencyType;
   const count = habit.targetCount;
   const period = freq === 'daily' ? 'day' : freq === 'weekly' ? 'week' : 'month';
   return `${count}x per ${period}`;
+}
+
+/** Active habits that haven't yet met their current-period target. */
+export interface DueHabit {
+  habit: Habit;
+  completed: number;
+  target: number;
+  period: string;
+}
+
+export function getDueHabits(
+  habits: Habit[],
+  completions: HabitCompletion[],
+  now: Date = new Date()
+): DueHabit[] {
+  return habits
+    .filter((h) => h.isActive)
+    .map((habit) => {
+      const { completed, target } = getHabitProgress(habit, completions, now);
+      return { habit, completed, target, period: periodLabel(habit) };
+    })
+    .filter(({ completed, target }) => completed < target);
 }

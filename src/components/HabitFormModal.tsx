@@ -10,6 +10,7 @@ import {
   Switch,
   KeyboardAvoidingView,
   Platform,
+  Alert,
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { Habit, FrequencyType } from '../models/types';
@@ -31,7 +32,12 @@ const FREQUENCY_OPTIONS: { label: string; value: FrequencyType }[] = [
 const CATEGORIES = ['Health', 'Fitness', 'Family', 'Spiritual', 'Learning', 'Other'];
 
 export function HabitFormModal({ visible, onClose, editingHabit }: HabitFormModalProps) {
-  const { addHabit, updateHabit, deleteHabit } = useHabits();
+  const { state, addHabit, updateHabit, deleteHabit } = useHabits();
+
+  // Check if the habit has any completion history
+  const hasCompletions = editingHabit
+    ? state.completions.some((c) => c.habitId === editingHabit.id)
+    : false;
 
   const [name, setName] = useState('');
   const [category, setCategory] = useState('');
@@ -77,10 +83,44 @@ export function HabitFormModal({ visible, onClose, editingHabit }: HabitFormModa
     onClose();
   }
 
+  function handleArchive() {
+    if (!editingHabit) return;
+    updateHabit({ ...editingHabit, isActive: false, updatedAt: new Date().toISOString() });
+    onClose();
+  }
+
   function handleDelete() {
-    if (editingHabit) {
-      deleteHabit(editingHabit.id);
-      onClose();
+    if (!editingHabit) return;
+    if (hasCompletions) {
+      Alert.alert(
+        'Delete Habit',
+        'This habit has completion history. Deleting it will permanently remove all its records.\n\nConsider archiving it instead to preserve your history.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Archive Instead',
+            onPress: () => { handleArchive(); },
+          },
+          {
+            text: 'Delete Permanently',
+            style: 'destructive',
+            onPress: () => { deleteHabit(editingHabit.id); onClose(); },
+          },
+        ]
+      );
+    } else {
+      Alert.alert(
+        'Delete Habit',
+        `Are you sure you want to delete "${editingHabit.name}"? This cannot be undone.`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Delete',
+            style: 'destructive',
+            onPress: () => { deleteHabit(editingHabit.id); onClose(); },
+          },
+        ]
+      );
     }
   }
 
@@ -199,10 +239,18 @@ export function HabitFormModal({ visible, onClose, editingHabit }: HabitFormModa
           </View>
 
           {editingHabit && (
-            <TouchableOpacity style={styles.deleteBtn} onPress={handleDelete}>
-              <Feather name="trash-2" size={16} color="#EF4444" />
-              <Text style={styles.deleteBtnText}>Delete Habit</Text>
-            </TouchableOpacity>
+            <View style={styles.dangerSection}>
+              {editingHabit.isActive && (
+                <TouchableOpacity style={styles.archiveBtn} onPress={handleArchive}>
+                  <Feather name="pause-circle" size={16} color={Colors.textSecondary} />
+                  <Text style={styles.archiveBtnText}>Archive (Pause) Habit</Text>
+                </TouchableOpacity>
+              )}
+              <TouchableOpacity style={styles.deleteBtn} onPress={handleDelete}>
+                <Feather name="trash-2" size={16} color="#EF4444" />
+                <Text style={styles.deleteBtnText}>Delete Habit</Text>
+              </TouchableOpacity>
+            </View>
           )}
 
           <View style={{ height: Spacing.xxl }} />
@@ -297,11 +345,21 @@ const styles = StyleSheet.create({
   },
   toggleLabel: { ...Typography.body, fontWeight: '500' as const, marginBottom: 2 },
   toggleSub: { ...Typography.bodySmall, maxWidth: '80%' },
+  dangerSection: { marginTop: Spacing.xl, gap: Spacing.sm },
+  archiveBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    padding: Spacing.md,
+    borderRadius: Radius.md,
+    backgroundColor: Colors.border,
+    justifyContent: 'center',
+  },
+  archiveBtnText: { color: Colors.textSecondary, fontWeight: '600' as const, fontSize: 15 },
   deleteBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    marginTop: Spacing.xl,
     padding: Spacing.md,
     borderRadius: Radius.md,
     backgroundColor: '#FEF2F2',

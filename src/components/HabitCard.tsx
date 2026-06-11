@@ -3,7 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { Habit } from '../models/types';
 import { useHabits } from '../store/HabitContext';
-import { getHabitProgress, frequencyLabel } from '../utils/habitUtils';
+import { getHabitProgress, frequencyLabel, periodLabel } from '../utils/habitUtils';
 import { Colors, Spacing, Radius, Typography } from '../theme';
 import { Card } from './Card';
 
@@ -20,7 +20,14 @@ export function HabitCard({ habit, onEdit, compact = false }: HabitCardProps) {
     state.completions
   );
 
+  const period = periodLabel(habit);
   const barColor = done ? Colors.success : Colors.primary;
+
+  // Prevent logging beyond the target for the current period
+  function handleLog() {
+    if (done) return;
+    logCompletion(habit.id);
+  }
 
   if (compact) {
     return (
@@ -29,7 +36,7 @@ export function HabitCard({ habit, onEdit, compact = false }: HabitCardProps) {
           <View style={[styles.dot, { backgroundColor: done ? Colors.success : Colors.primary }]} />
           <Text style={styles.compactName} numberOfLines={1}>{habit.name}</Text>
           <Text style={styles.compactCount}>
-            {completed}/{target}
+            {completed}/{target} {period}
           </Text>
         </View>
         <View style={styles.barTrack}>
@@ -40,10 +47,17 @@ export function HabitCard({ habit, onEdit, compact = false }: HabitCardProps) {
   }
 
   return (
-    <Card style={styles.card}>
+    <Card style={[styles.card, !habit.isActive && styles.cardInactive]}>
       <View style={styles.header}>
         <View style={styles.info}>
-          <Text style={styles.name}>{habit.name}</Text>
+          <View style={styles.nameRow}>
+            <Text style={styles.name}>{habit.name}</Text>
+            {!habit.isActive && (
+              <View style={styles.inactiveBadge}>
+                <Text style={styles.inactiveBadgeText}>Paused</Text>
+              </View>
+            )}
+          </View>
           <View style={styles.meta}>
             {habit.category ? (
               <View style={styles.badge}>
@@ -68,24 +82,24 @@ export function HabitCard({ habit, onEdit, compact = false }: HabitCardProps) {
           />
         </View>
         <Text style={styles.countText}>
-          {completed}/{target}
+          {completed}/{target} {period}
         </Text>
       </View>
 
-      {!done && habit.isActive && (
+      {habit.isActive && !done && (
         <TouchableOpacity
           style={styles.logBtn}
-          onPress={() => logCompletion(habit.id)}
+          onPress={handleLog}
           activeOpacity={0.75}
         >
           <Feather name="check" size={14} color={Colors.primary} />
-          <Text style={styles.logBtnText}>Log +1</Text>
+          <Text style={styles.logBtnText}>+ Complete</Text>
         </TouchableOpacity>
       )}
       {done && (
         <View style={styles.doneRow}>
           <Feather name="check-circle" size={14} color={Colors.success} />
-          <Text style={styles.doneText}>Done for this period</Text>
+          <Text style={styles.doneText}>Done for {period}!</Text>
         </View>
       )}
     </Card>
@@ -94,9 +108,18 @@ export function HabitCard({ habit, onEdit, compact = false }: HabitCardProps) {
 
 const styles = StyleSheet.create({
   card: { marginBottom: Spacing.sm },
+  cardInactive: { opacity: 0.65 },
   header: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: Spacing.sm },
   info: { flex: 1 },
-  name: { ...Typography.h3, marginBottom: 4 },
+  nameRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4, flexWrap: 'wrap' },
+  name: { ...Typography.h3 },
+  inactiveBadge: {
+    backgroundColor: Colors.border,
+    borderRadius: Radius.sm,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+  },
+  inactiveBadgeText: { fontSize: 11, fontWeight: '600' as const, color: Colors.textSecondary },
   meta: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   badge: {
     backgroundColor: Colors.primaryLight,
@@ -116,7 +139,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   barFill: { height: '100%', borderRadius: 3 },
-  countText: { ...Typography.bodySmall, minWidth: 36, textAlign: 'right' },
+  countText: { ...Typography.bodySmall, minWidth: 80, textAlign: 'right' },
   logBtn: {
     flexDirection: 'row',
     alignItems: 'center',
