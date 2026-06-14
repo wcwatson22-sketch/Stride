@@ -4,319 +4,317 @@ import {
   Text,
   ScrollView,
   StyleSheet,
-  Switch,
   TouchableOpacity,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useHabits } from '../store/HabitContext';
-import { Habit } from '../models/types';
+import { Habit, HabitCompletion } from '../models/types';
 import {
-  getTodayStats,
-  getWeeklyConsistency,
-  getCurrentStreak,
-  getMotivationalLabel,
   getDueHabits,
   getHabitProgress,
   getIndividualStreak,
+  getOverallProgress,
+  getWeeklyConsistency,
+  getCurrentStreak,
+  getMotivationalLabel,
+  getCategorySnapshot,
   periodLabel,
   DueHabit,
 } from '../utils/habitUtils';
 import { getCategoryDef } from '../constants/categories';
 import { Card } from '../components/Card';
-import { HabitCard } from '../components/HabitCard';
 import { StreakBadge } from '../components/StreakBadge';
 import { Colors, Spacing, Typography, Radius } from '../theme';
 
-const PINNED_PREVIEW_COUNT = 2;
+const ACTIONS_PREVIEW = 4;
+
+// ── Main screen ────────────────────────────────────────────────────────────────
 
 export function DashboardScreen() {
   const navigation = useNavigation();
-  const { state, updateSettings, logCompletion } = useHabits();
-  const { habits, completions, settings } = state;
+  const { state, logCompletion } = useHabits();
+  const { habits, completions } = state;
 
-  const [pinnedExpanded, setPinnedExpanded] = useState(false);
+  const [actionsExpanded, setActionsExpanded] = useState(false);
+  const [completedExpanded, setCompletedExpanded] = useState(false);
 
   const activeHabits = habits.filter((h) => h.isActive);
-  const dailyActiveHabits = activeHabits.filter((h) => h.frequencyType === 'daily');
   const hasHabits = habits.length > 0;
 
-  // Pinned: active habits with isPinned true, sorted daily → weekly → monthly
-  const pinnedHabits = activeHabits
-    .filter((h) => h.isPinned)
-    .sort((a, b) => {
-      const order = { daily: 0, weekly: 1, monthly: 2 };
-      return order[a.frequencyType] - order[b.frequencyType];
-    });
+  const dueItems = getDueHabits(activeHabits, completions);
+  const doneHabits = activeHabits.filter(
+    (h) => getHabitProgress(h, completions).done
+  );
 
-  const visiblePinned = pinnedExpanded
-    ? pinnedHabits
-    : pinnedHabits.slice(0, PINNED_PREVIEW_COUNT);
-  const hiddenPinnedCount = pinnedHabits.length - PINNED_PREVIEW_COUNT;
+  const visibleDue = actionsExpanded
+    ? dueItems
+    : dueItems.slice(0, ACTIONS_PREVIEW);
+  const hiddenCount = dueItems.length - ACTIONS_PREVIEW;
 
-  const todayStats = getTodayStats(activeHabits, completions);
+  const overall = getOverallProgress(activeHabits, completions);
   const weeklyConsistency = getWeeklyConsistency(activeHabits, completions);
   const streak = getCurrentStreak(activeHabits, completions);
   const motivationalLabel = getMotivationalLabel(weeklyConsistency);
-  const dueHabits = getDueHabits(activeHabits, completions);
-
-  const remaining = todayStats.totalActions - todayStats.completedActions;
-  const showDetails = settings.showIndividualHabitsOnDashboard;
-
-  const greeting = getGreeting();
+  const categorySnapshot = getCategorySnapshot(activeHabits, completions);
 
   function goToHabits() {
     navigation.navigate('Habits' as never);
   }
 
-  // ── No habits yet ───────────────────────────────────────────────────────────
+  // ── Empty state ──────────────────────────────────────────────────────────────
   if (!hasHabits) {
     return (
-      <SafeAreaView style={styles.safe} edges={['top']}>
-        <View style={styles.headerSection}>
-          <Text style={styles.greeting}>{greeting}</Text>
+      <SafeAreaView style={s.safe} edges={['top']}>
+        <View style={s.header}>
+          <Text style={s.greeting}>{greeting()}</Text>
         </View>
-        <View style={styles.emptyStateWrap}>
-          <View style={styles.emptyIconBox}>
-            <Feather name="zap" size={32} color={Colors.primary} />
+        <View style={s.emptyWrap}>
+          <View style={s.emptyIcon}>
+            <Feather name="zap" size={30} color={Colors.primary} />
           </View>
-          <Text style={styles.emptyStateTitle}>Start building momentum.</Text>
-          <Text style={styles.emptyStateBody}>
-            Add your first habit to begin tracking your progress and consistency.
+          <Text style={s.emptyTitle}>Start building momentum.</Text>
+          <Text style={s.emptyBody}>
+            Add your first habit to begin tracking your progress.
           </Text>
-          <TouchableOpacity style={styles.emptyStateBtn} onPress={goToHabits} activeOpacity={0.8}>
-            <Feather name="plus" size={16} color={Colors.surface} />
-            <Text style={styles.emptyStateBtnText}>Add Habit</Text>
+          <TouchableOpacity style={s.emptyBtn} onPress={goToHabits} activeOpacity={0.8}>
+            <Feather name="plus" size={15} color={Colors.surface} />
+            <Text style={s.emptyBtnText}>Add Habit</Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
     );
   }
 
-  // ── Normal dashboard ────────────────────────────────────────────────────────
+  // ── Dashboard ────────────────────────────────────────────────────────────────
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
+    <SafeAreaView style={s.safe} edges={['top']}>
       <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={styles.content}
+        style={s.scroll}
+        contentContainerStyle={s.content}
         showsVerticalScrollIndicator={false}
       >
         {/* Header */}
-        <View style={styles.headerSection}>
-          <Text style={styles.greeting}>{greeting}</Text>
-          <Text style={styles.subtitle}>Here's how you're doing</Text>
+        <View style={s.header}>
+          <Text style={s.greeting}>{greeting()}</Text>
+          <Text style={s.subGreeting}>
+            {dueItems.length === 0
+              ? "You're all caught up."
+              : `${dueItems.length} action${dueItems.length !== 1 ? 's' : ''} remaining`}
+          </Text>
         </View>
 
-        {/* ── Today's Progress ─────────────────────────────────────────────── */}
-        <Card style={styles.card}>
-          <View style={styles.cardHeader}>
-            <View style={[styles.iconBox, { backgroundColor: Colors.primaryLight }]}>
-              <Feather name="sun" size={16} color={Colors.primary} />
+        {/* ── A. TODAY'S ACTIONS ──────────────────────────────────────────────── */}
+        <View style={s.sectionHeader}>
+          <Feather name="check-circle" size={13} color={Colors.primary} />
+          <Text style={s.sectionTitle}>TODAY'S ACTIONS</Text>
+        </View>
+
+        <Card style={s.actionsCard}>
+          {dueItems.length === 0 && doneHabits.length === 0 ? (
+            // No active habits at all
+            <View style={s.caughtUp}>
+              <Text style={s.caughtUpText}>No active habits yet. </Text>
+              <TouchableOpacity onPress={goToHabits} activeOpacity={0.75}>
+                <Text style={s.linkText}>Add one →</Text>
+              </TouchableOpacity>
             </View>
-            <Text style={styles.cardTitle}>Today's Progress</Text>
-          </View>
-          {todayStats.totalActions === 0 ? (
-            <Text style={styles.emptyNote}>
-              No daily habits active.{' '}
-              <Text style={styles.linkText} onPress={goToHabits}>Add one →</Text>
-            </Text>
+          ) : dueItems.length === 0 ? (
+            // All done
+            <View style={s.caughtUp}>
+              <Feather name="check-circle" size={16} color={Colors.success} />
+              <Text style={[s.caughtUpText, { color: Colors.success }]}>
+                You're caught up for now.
+              </Text>
+            </View>
           ) : (
             <>
-              <View style={styles.bigStatRow}>
-                <Text style={styles.bigStat}>{todayStats.completedActions}</Text>
-                <Text style={styles.bigStatDivider}>/</Text>
-                <Text style={styles.bigStatTotal}>{todayStats.totalActions}</Text>
-                <Text style={styles.bigStatLabel}>actions today</Text>
-              </View>
-              <View style={styles.barTrack}>
-                <View
-                  style={[
-                    styles.barFill,
-                    {
-                      width: `${todayStats.percentage * 100}%`,
-                      backgroundColor:
-                        todayStats.percentage >= 1 ? Colors.success : Colors.primary,
-                    },
-                  ]}
+              {visibleDue.map((item, idx) => (
+                <ActionRow
+                  key={item.habit.id}
+                  item={item}
+                  completions={completions}
+                  isFirst={idx === 0}
+                  onComplete={() => logCompletion(item.habit.id)}
                 />
-              </View>
-              {todayStats.percentage >= 1 ? (
-                <Text style={[styles.progressNote, { color: Colors.success }]}>
-                  All done for today! 🎉
-                </Text>
-              ) : (
-                <Text style={styles.progressNote}>
-                  {remaining} action{remaining !== 1 ? 's' : ''} remaining
-                </Text>
+              ))}
+
+              {/* Show More / Show Less */}
+              {hiddenCount > 0 && !actionsExpanded && (
+                <TouchableOpacity
+                  style={s.showMoreRow}
+                  onPress={() => setActionsExpanded(true)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={s.showMoreText}>
+                    Show {hiddenCount} more
+                  </Text>
+                  <Feather name="chevron-down" size={14} color={Colors.primary} />
+                </TouchableOpacity>
               )}
+              {actionsExpanded && dueItems.length > ACTIONS_PREVIEW && (
+                <TouchableOpacity
+                  style={s.showMoreRow}
+                  onPress={() => setActionsExpanded(false)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={s.showMoreText}>Show less</Text>
+                  <Feather name="chevron-up" size={14} color={Colors.primary} />
+                </TouchableOpacity>
+              )}
+            </>
+          )}
+
+          {/* Completed section */}
+          {doneHabits.length > 0 && (
+            <>
+              <TouchableOpacity
+                style={s.completedToggle}
+                onPress={() => setCompletedExpanded((v) => !v)}
+                activeOpacity={0.7}
+              >
+                <Feather name="check" size={12} color={Colors.success} />
+                <Text style={s.completedToggleText}>
+                  {doneHabits.length} completed
+                </Text>
+                <Feather
+                  name={completedExpanded ? 'chevron-up' : 'chevron-down'}
+                  size={12}
+                  color={Colors.textMuted}
+                />
+              </TouchableOpacity>
+
+              {completedExpanded &&
+                doneHabits.map((habit) => (
+                  <CompletedRow key={habit.id} habit={habit} completions={completions} />
+                ))}
             </>
           )}
         </Card>
 
-        {/* ── Pinned Habits ────────────────────────────────────────────────── */}
-        {pinnedHabits.length === 0 ? (
-          <Card style={[styles.card, styles.pinnedEmptyCard]}>
-            <View style={styles.pinnedEmptyRow}>
-              <Feather name="bookmark" size={14} color={Colors.textMuted} />
-              <Text style={styles.pinnedEmptyText}>
-                No pinned habits.{' '}
-                <Text style={styles.linkText} onPress={goToHabits}>Pin a habit →</Text>
-              </Text>
+        {/* ── B. TODAY'S OVERVIEW ─────────────────────────────────────────────── */}
+        {activeHabits.length > 0 && (
+          <>
+            <View style={s.sectionHeader}>
+              <Feather name="sun" size={13} color={Colors.textMuted} />
+              <Text style={s.sectionTitle}>TODAY'S OVERVIEW</Text>
             </View>
-          </Card>
-        ) : (
-          <View>
-            <View style={styles.sectionHeader}>
-              <Feather name="bookmark" size={12} color={Colors.primary} />
-              <Text style={styles.sectionTitle}>Pinned</Text>
-              <View style={styles.sectionPill}>
-                <Text style={styles.sectionPillText}>{pinnedHabits.length}</Text>
+            <Card style={s.overviewCard}>
+              <View style={s.overviewRow}>
+                <View style={s.overviewStat}>
+                  <Text style={s.overviewNum}>{overall.completed}</Text>
+                  <Text style={s.overviewLabel}>done</Text>
+                </View>
+                <View style={s.overviewDivider} />
+                <View style={s.overviewStat}>
+                  <Text style={s.overviewNum}>{overall.total - overall.completed}</Text>
+                  <Text style={s.overviewLabel}>remaining</Text>
+                </View>
+                <View style={s.overviewDivider} />
+                <View style={s.overviewStat}>
+                  <Text style={[s.overviewNum, { color: overall.percentage >= 1 ? Colors.success : Colors.primary }]}>
+                    {Math.round(overall.percentage * 100)}%
+                  </Text>
+                  <Text style={s.overviewLabel}>complete</Text>
+                </View>
               </View>
-            </View>
-
-            {visiblePinned.map((habit) => (
-              <PinnedHabitCard
-                key={habit.id}
-                habit={habit}
-                completions={completions}
-                onComplete={() => logCompletion(habit.id)}
-              />
-            ))}
-
-            {/* Expand / collapse control */}
-            {pinnedHabits.length > PINNED_PREVIEW_COUNT && (
-              <TouchableOpacity
-                style={styles.expandBtn}
-                onPress={() => setPinnedExpanded((v) => !v)}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.expandBtnText}>
-                  {pinnedExpanded
-                    ? 'Show Less'
-                    : `Show ${hiddenPinnedCount} More`}
-                </Text>
-                <Feather
-                  name={pinnedExpanded ? 'chevron-up' : 'chevron-down'}
-                  size={14}
-                  color={Colors.primary}
+              <View style={s.overviewBar}>
+                <View
+                  style={[
+                    s.overviewBarFill,
+                    {
+                      width: `${overall.percentage * 100}%`,
+                      backgroundColor:
+                        overall.percentage >= 1 ? Colors.success : Colors.primary,
+                    },
+                  ]}
                 />
-              </TouchableOpacity>
-            )}
-          </View>
+              </View>
+            </Card>
+          </>
         )}
 
-        {/* ── Weekly Consistency ───────────────────────────────────────────── */}
-        <Card style={styles.card}>
-          <View style={styles.cardHeader}>
-            <View style={[styles.iconBox, { backgroundColor: Colors.successLight }]}>
-              <Feather name="bar-chart-2" size={16} color={Colors.success} />
+        {/* ── C. WEEKLY MOMENTUM ──────────────────────────────────────────────── */}
+        {activeHabits.length > 0 && (
+          <>
+            <View style={s.sectionHeader}>
+              <Feather name="zap" size={13} color={Colors.textMuted} />
+              <Text style={s.sectionTitle}>WEEKLY MOMENTUM</Text>
             </View>
-            <Text style={styles.cardTitle}>Weekly Consistency</Text>
-          </View>
-          <View style={styles.bigStatRow}>
-            <Text style={[styles.bigStat, { color: Colors.success }]}>
-              {Math.round(weeklyConsistency * 100)}%
-            </Text>
-            <Text style={styles.bigStatLabel}>this week</Text>
-          </View>
-          <View style={styles.barTrack}>
-            <View
-              style={[
-                styles.barFill,
-                { width: `${weeklyConsistency * 100}%`, backgroundColor: Colors.success },
-              ]}
-            />
-          </View>
-          <View style={styles.motivationalRow}>
-            <View
-              style={[
-                styles.motivationalBadge,
-                { backgroundColor: motivationalColor(weeklyConsistency) + '22' },
-              ]}
-            >
-              <Text
-                style={[
-                  styles.motivationalText,
-                  { color: motivationalColor(weeklyConsistency) },
-                ]}
-              >
-                {motivationalLabel}
-              </Text>
-            </View>
-          </View>
-        </Card>
-
-        {/* ── Momentum ─────────────────────────────────────────────────────── */}
-        {dailyActiveHabits.length > 0 && (
-          <Card style={styles.card}>
-            <View style={styles.cardHeader}>
-              <View style={[styles.iconBox, { backgroundColor: Colors.warningLight }]}>
-                <Feather name="zap" size={16} color={Colors.warning} />
+            <Card style={s.weekCard}>
+              <View style={s.weekRow}>
+                <View style={s.weekStat}>
+                  <Text style={[s.weekNum, { color: Colors.success }]}>
+                    {Math.round(weeklyConsistency * 100)}%
+                  </Text>
+                  <Text style={s.weekLabel}>consistency</Text>
+                </View>
+                <View style={s.overviewDivider} />
+                <View style={s.weekStat}>
+                  <Text style={[s.weekNum, { color: Colors.warning }]}>{streak}</Text>
+                  <Text style={s.weekLabel}>day streak</Text>
+                </View>
+                <View style={s.overviewDivider} />
+                <View style={[s.weekStat, { flex: 2 }]}>
+                  <Text
+                    style={[
+                      s.motivLabel,
+                      { color: motivationalColor(weeklyConsistency) },
+                    ]}
+                  >
+                    {motivationalLabel}
+                  </Text>
+                </View>
               </View>
-              <Text style={styles.cardTitle}>Momentum</Text>
-            </View>
-            {streak === 0 ? (
-              <>
-                <View style={styles.bigStatRow}>
-                  <Text style={[styles.bigStat, { color: Colors.textMuted }]}>0</Text>
-                  <Text style={styles.bigStatLabel}>day streak</Text>
-                </View>
-                <Text style={styles.streakNote}>
-                  Complete all daily habits to start your streak.
-                </Text>
-              </>
-            ) : (
-              <>
-                <View style={styles.bigStatRow}>
-                  <Text style={[styles.bigStat, { color: Colors.warning }]}>{streak}</Text>
-                  <Text style={styles.bigStatLabel}>day streak</Text>
-                </View>
-                <Text style={styles.streakNote}>
-                  {streak < 3
-                    ? "Keep it going — you're just getting started!"
-                    : streak < 7
-                    ? 'Nice work — momentum is building!'
-                    : "Incredible — don't break the chain!"}
-                </Text>
-              </>
-            )}
-          </Card>
+            </Card>
+          </>
         )}
 
-        {/* ── Today's Actions ──────────────────────────────────────────────── */}
-        <Card style={styles.card}>
-          <View style={styles.actionsHeader}>
-            <View style={styles.cardHeader}>
-              <View style={[styles.iconBox, { backgroundColor: Colors.primaryLight }]}>
-                <Feather name="check-circle" size={16} color={Colors.primary} />
-              </View>
-              <Text style={styles.cardTitle}>Today's Actions</Text>
+        {/* ── D. CATEGORY SNAPSHOT ────────────────────────────────────────────── */}
+        {categorySnapshot.length > 0 && (
+          <>
+            <View style={s.sectionHeader}>
+              <Feather name="grid" size={13} color={Colors.textMuted} />
+              <Text style={s.sectionTitle}>BY CATEGORY</Text>
             </View>
-            <Switch
-              value={showDetails}
-              onValueChange={(v) => updateSettings({ showIndividualHabitsOnDashboard: v })}
-              trackColor={{ true: Colors.primary }}
-              thumbColor={Colors.surface}
-              style={styles.inlineSwitch}
-            />
-          </View>
-
-          {!showDetails && (
-            <ActionsAggregate
-              todayStats={todayStats}
-              remaining={remaining}
-              onViewHabits={goToHabits}
-            />
-          )}
-          {showDetails && (
-            <ActionDetails
-              dueHabits={dueHabits}
-              completions={completions}
-              onComplete={(id) => logCompletion(id)}
-            />
-          )}
-        </Card>
+            <Card style={s.catCard}>
+              {categorySnapshot.map((item, idx) => {
+                const catDef = getCategoryDef(item.category);
+                const pct = item.target > 0 ? item.completed / item.target : 0;
+                return (
+                  <View
+                    key={item.category}
+                    style={[
+                      s.catRow,
+                      idx > 0 && s.catRowBorder,
+                    ]}
+                  >
+                    <View style={[s.catDot, { backgroundColor: catDef.color }]} />
+                    <Text style={s.catName}>{item.category}</Text>
+                    <View style={s.catBarWrap}>
+                      <View style={s.catBar}>
+                        <View
+                          style={[
+                            s.catBarFill,
+                            {
+                              width: `${pct * 100}%`,
+                              backgroundColor:
+                                pct >= 1 ? Colors.success : catDef.color,
+                            },
+                          ]}
+                        />
+                      </View>
+                    </View>
+                    <Text style={s.catProgress}>
+                      {item.completed}/{item.target}
+                    </Text>
+                  </View>
+                );
+              })}
+            </Card>
+          </>
+        )}
 
         <View style={{ height: Spacing.xl }} />
       </ScrollView>
@@ -324,196 +322,82 @@ export function DashboardScreen() {
   );
 }
 
-// ── Pinned Habit Card ──────────────────────────────────────────────────────────
+// ── Action Row (due habit) ─────────────────────────────────────────────────────
 
-interface PinnedHabitCardProps {
-  habit: Habit;
-  completions: ReturnType<typeof useHabits>['state']['completions'];
-  onComplete: () => void;
-}
-
-function PinnedHabitCard({ habit, completions, onComplete }: PinnedHabitCardProps) {
-  const { completed, target, percentage, done } = getHabitProgress(habit, completions);
-  const period = periodLabel(habit);
-  const catDef = habit.category ? getCategoryDef(habit.category) : null;
-  const streak = getIndividualStreak(habit, completions);
-
-  return (
-    <Card
-      style={[
-        pinnedStyles.card,
-        catDef ? { borderLeftWidth: 3, borderLeftColor: catDef.color } : null,
-      ]}
-    >
-      <View style={pinnedStyles.row}>
-        {/* Left: name + meta */}
-        <View style={pinnedStyles.info}>
-          <View style={pinnedStyles.nameRow}>
-            {catDef && <View style={[pinnedStyles.dot, { backgroundColor: catDef.color }]} />}
-            <Text style={pinnedStyles.name} numberOfLines={1}>{habit.name}</Text>
-          </View>
-          <View style={pinnedStyles.metaRow}>
-            {catDef && (
-              <Text style={[pinnedStyles.catLabel, { color: catDef.color }]}>
-                {habit.category}
-              </Text>
-            )}
-            <Text style={pinnedStyles.progressText}>
-              {completed}/{target} {period}
-            </Text>
-            <View style={pinnedStyles.metaDivider} />
-            <StreakBadge streak={streak} habit={habit} />
-          </View>
-          <View style={pinnedStyles.barTrack}>
-            <View
-              style={[
-                pinnedStyles.barFill,
-                {
-                  width: `${percentage * 100}%`,
-                  backgroundColor: done ? Colors.success : (catDef?.color ?? Colors.primary),
-                },
-              ]}
-            />
-          </View>
-        </View>
-
-        {/* Right: action */}
-        {done ? (
-          <View style={pinnedStyles.doneBox}>
-            <Feather name="check-circle" size={20} color={Colors.success} />
-          </View>
-        ) : (
-          <TouchableOpacity
-            style={pinnedStyles.completeBtn}
-            onPress={onComplete}
-            activeOpacity={0.75}
-          >
-            <Feather name="plus" size={14} color={Colors.primary} />
-            <Text style={pinnedStyles.completeBtnText}>Complete</Text>
-          </TouchableOpacity>
-        )}
-      </View>
-    </Card>
-  );
-}
-
-// ── Today's Actions sub-components ────────────────────────────────────────────
-
-interface ActionsAggregateProps {
-  todayStats: { completedActions: number; totalActions: number; percentage: number };
-  remaining: number;
-  onViewHabits: () => void;
-}
-
-function ActionsAggregate({ todayStats, remaining, onViewHabits }: ActionsAggregateProps) {
-  if (todayStats.totalActions === 0) {
-    return (
-      <View style={aggStyles.wrap}>
-        <Text style={aggStyles.emptyLine}>No daily habits active.</Text>
-        <TouchableOpacity onPress={onViewHabits} activeOpacity={0.75} style={aggStyles.viewBtn}>
-          <Text style={aggStyles.viewBtnText}>Manage Habits →</Text>
-        </TouchableOpacity>
-      </View>
-    );
-  }
-  if (todayStats.percentage >= 1) {
-    return (
-      <View style={aggStyles.wrap}>
-        <View style={aggStyles.caughtUpRow}>
-          <Feather name="check-circle" size={16} color={Colors.success} />
-          <Text style={aggStyles.caughtUpText}>All caught up for today!</Text>
-        </View>
-      </View>
-    );
-  }
-  return (
-    <View style={aggStyles.wrap}>
-      <View style={aggStyles.statRow}>
-        <Text style={aggStyles.statMain}>
-          {todayStats.completedActions} of {todayStats.totalActions} done today
-        </Text>
-        <Text style={aggStyles.statSub}>
-          {remaining} action{remaining !== 1 ? 's' : ''} remaining
-        </Text>
-      </View>
-      <TouchableOpacity onPress={onViewHabits} activeOpacity={0.75} style={aggStyles.viewBtn}>
-        <Text style={aggStyles.viewBtnText}>View Habits →</Text>
-      </TouchableOpacity>
-    </View>
-  );
-}
-
-interface ActionDetailsProps {
-  dueHabits: DueHabit[];
-  completions: ReturnType<typeof useHabits>['state']['completions'];
-  onComplete: (id: string) => void;
-}
-
-function ActionDetails({ dueHabits, completions, onComplete }: ActionDetailsProps) {
-  if (dueHabits.length === 0) {
-    return (
-      <View style={detailStyles.caughtUpRow}>
-        <Feather name="check-circle" size={16} color={Colors.success} />
-        <Text style={detailStyles.caughtUpText}>All caught up!</Text>
-      </View>
-    );
-  }
-  return (
-    <View style={detailStyles.list}>
-      {dueHabits.map((item) => (
-        <DueHabitRow
-          key={item.habit.id}
-          item={item}
-          completions={completions}
-          onComplete={() => onComplete(item.habit.id)}
-        />
-      ))}
-    </View>
-  );
-}
-
-interface DueHabitRowProps {
+interface ActionRowProps {
   item: DueHabit;
-  completions: ReturnType<typeof useHabits>['state']['completions'];
+  completions: HabitCompletion[];
+  isFirst: boolean;
   onComplete: () => void;
 }
 
-function DueHabitRow({ item, completions, onComplete }: DueHabitRowProps) {
+function ActionRow({ item, completions, isFirst, onComplete }: ActionRowProps) {
   const { habit, completed, target, period } = item;
-  const pct = Math.min(1, completed / Math.max(1, target));
   const catDef = habit.category ? getCategoryDef(habit.category) : null;
   const streak = getIndividualStreak(habit, completions);
 
   return (
-    <View style={dueStyles.row}>
-      <View style={dueStyles.info}>
-        <View style={dueStyles.nameRow}>
-          {catDef && <View style={[dueStyles.dot, { backgroundColor: catDef.color }]} />}
-          <Text style={dueStyles.name} numberOfLines={1}>{habit.name}</Text>
-          <View style={dueStyles.nameStreak}>
-            <StreakBadge streak={streak} habit={habit} />
-          </View>
+    <View style={[row.container, !isFirst && row.border]}>
+      {/* Category color stripe */}
+      <View
+        style={[row.stripe, { backgroundColor: catDef?.color ?? Colors.border }]}
+      />
+
+      {/* Content */}
+      <View style={row.body}>
+        <View style={row.topLine}>
+          <Text style={row.name} numberOfLines={1}>
+            {habit.name}
+          </Text>
+          <StreakBadge streak={streak} habit={habit} />
         </View>
-        <View style={dueStyles.barTrack}>
-          <View
-            style={[
-              dueStyles.barFill,
-              { width: `${pct * 100}%`, backgroundColor: catDef?.color ?? Colors.primary },
-            ]}
-          />
-        </View>
-        <Text style={dueStyles.progress}>
+        <Text style={row.meta} numberOfLines={1}>
+          {habit.category ? `${habit.category} · ` : ''}
           {completed}/{target} {period}
         </Text>
       </View>
+
+      {/* Action */}
       <TouchableOpacity
-        style={dueStyles.completeBtn}
+        style={row.btn}
         onPress={onComplete}
         activeOpacity={0.75}
+        hitSlop={6}
       >
-        <Feather name="plus" size={14} color={Colors.primary} />
-        <Text style={dueStyles.completeBtnText}>Complete</Text>
+        <Feather name="plus" size={13} color={Colors.primary} />
+        <Text style={row.btnText}>Complete</Text>
       </TouchableOpacity>
+    </View>
+  );
+}
+
+// ── Completed Row ──────────────────────────────────────────────────────────────
+
+interface CompletedRowProps {
+  habit: Habit;
+  completions: HabitCompletion[];
+}
+
+function CompletedRow({ habit, completions }: CompletedRowProps) {
+  const { completed, target } = getHabitProgress(habit, completions);
+  const period = periodLabel(habit);
+  const catDef = habit.category ? getCategoryDef(habit.category) : null;
+
+  return (
+    <View style={[doneRow.container, doneRow.border]}>
+      <View style={[doneRow.stripe, { backgroundColor: catDef?.color ?? Colors.border }]} />
+      <View style={doneRow.body}>
+        <Text style={doneRow.name} numberOfLines={1}>
+          {habit.name}
+        </Text>
+        <Text style={doneRow.meta}>
+          {completed}/{target} {period}
+        </Text>
+      </View>
+      <View style={doneRow.doneChip}>
+        <Feather name="check" size={11} color={Colors.success} />
+        <Text style={doneRow.doneText}>Done</Text>
+      </View>
     </View>
   );
 }
@@ -527,142 +411,150 @@ function motivationalColor(consistency: number): string {
   return Colors.textMuted;
 }
 
-function getGreeting(): string {
-  const hour = new Date().getHours();
-  if (hour < 12) return 'Good morning';
-  if (hour < 17) return 'Good afternoon';
-  return 'Good evening';
+function greeting(): string {
+  const h = new Date().getHours();
+  return h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening';
 }
 
 // ── Styles ─────────────────────────────────────────────────────────────────────
 
-const pinnedStyles = StyleSheet.create({
-  card: { marginBottom: Spacing.xs },
-  row: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
-  info: { flex: 1 },
-  nameRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 3 },
-  dot: { width: 8, height: 8, borderRadius: 4, flexShrink: 0 },
-  name: { ...Typography.body, fontWeight: '600' as const, flexShrink: 1 },
-  metaRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 },
-  metaDivider: { width: 1, height: 10, backgroundColor: Colors.border },
-  catLabel: { fontSize: 11, fontWeight: '600' as const },
-  progressText: { ...Typography.bodySmall },
-  barTrack: {
-    height: 4,
-    backgroundColor: Colors.border,
-    borderRadius: 2,
-    overflow: 'hidden',
-  },
-  barFill: { height: '100%', borderRadius: 2 },
-  completeBtn: {
+const s = StyleSheet.create({
+  safe: { flex: 1, backgroundColor: Colors.background },
+  scroll: { flex: 1 },
+  content: { paddingHorizontal: Spacing.md, paddingBottom: Spacing.xl },
+
+  header: { paddingTop: Spacing.lg, paddingBottom: Spacing.md },
+  greeting: { ...Typography.h1 },
+  subGreeting: { ...Typography.bodySmall, marginTop: 3 },
+
+  sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    paddingVertical: 7,
-    paddingHorizontal: 10,
-    borderRadius: Radius.sm,
-    backgroundColor: Colors.primaryLight,
-    flexShrink: 0,
+    gap: 5,
+    marginTop: Spacing.md,
+    marginBottom: 6,
   },
-  completeBtnText: {
-    ...Typography.bodySmall,
-    color: Colors.primary,
-    fontWeight: '600' as const,
+  sectionTitle: {
+    fontSize: 11,
+    fontWeight: '700' as const,
+    letterSpacing: 0.8,
+    color: Colors.textMuted,
   },
-  doneBox: {
-    width: 36,
+
+  // Actions card
+  actionsCard: { padding: 0, overflow: 'hidden' },
+
+  caughtUp: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    padding: Spacing.md,
+  },
+  caughtUpText: { ...Typography.body },
+  linkText: { ...Typography.body, color: Colors.primary, fontWeight: '600' as const },
+
+  showMoreRow: {
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    flexShrink: 0,
-  },
-});
-
-const aggStyles = StyleSheet.create({
-  wrap: { gap: Spacing.sm },
-  statRow: { gap: 2 },
-  statMain: { ...Typography.body, fontWeight: '500' as const },
-  statSub: { ...Typography.bodySmall },
-  viewBtn: { alignSelf: 'flex-start' },
-  viewBtnText: { ...Typography.bodySmall, color: Colors.primary, fontWeight: '600' as const },
-  caughtUpRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  caughtUpText: { ...Typography.body, color: Colors.success, fontWeight: '500' as const },
-  emptyLine: { ...Typography.bodySmall, fontStyle: 'italic' },
-});
-
-const detailStyles = StyleSheet.create({
-  list: { gap: Spacing.sm, paddingTop: Spacing.xs },
-  caughtUpRow: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingTop: Spacing.xs },
-  caughtUpText: { ...Typography.body, color: Colors.success, fontWeight: '500' as const },
-});
-
-const dueStyles = StyleSheet.create({
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: Spacing.xs,
-    gap: Spacing.sm,
+    gap: 4,
+    paddingVertical: 10,
     borderTopWidth: 1,
     borderTopColor: Colors.border,
   },
-  info: { flex: 1, gap: 4 },
-  nameRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  nameStreak: { marginLeft: 'auto' as const },
-  dot: { width: 7, height: 7, borderRadius: 3.5, flexShrink: 0 },
-  name: { ...Typography.body, fontWeight: '500' as const, flexShrink: 1 },
-  barTrack: {
+  showMoreText: {
+    ...Typography.bodySmall,
+    color: Colors.primary,
+    fontWeight: '600' as const,
+  },
+
+  completedToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingVertical: 10,
+    paddingHorizontal: Spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: Colors.border,
+  },
+  completedToggleText: {
+    ...Typography.bodySmall,
+    color: Colors.success,
+    fontWeight: '600' as const,
+    flex: 1,
+  },
+
+  // Overview card
+  overviewCard: { paddingVertical: Spacing.sm },
+  overviewRow: { flexDirection: 'row', alignItems: 'center', marginBottom: Spacing.sm },
+  overviewStat: { flex: 1, alignItems: 'center' },
+  overviewNum: { fontSize: 22, fontWeight: '700' as const, color: Colors.primary },
+  overviewLabel: { ...Typography.bodySmall, marginTop: 2 },
+  overviewDivider: { width: 1, height: 32, backgroundColor: Colors.border },
+  overviewBar: {
+    height: 5,
+    backgroundColor: Colors.border,
+    borderRadius: 3,
+    overflow: 'hidden',
+  },
+  overviewBarFill: { height: '100%', borderRadius: 3 },
+
+  // Weekly card
+  weekCard: { paddingVertical: Spacing.sm },
+  weekRow: { flexDirection: 'row', alignItems: 'center' },
+  weekStat: { flex: 1, alignItems: 'center' },
+  weekNum: { fontSize: 22, fontWeight: '700' as const },
+  weekLabel: { ...Typography.bodySmall, marginTop: 2 },
+  motivLabel: { fontSize: 12, fontWeight: '700' as const, textAlign: 'center' },
+
+  // Category card
+  catCard: { padding: 0, overflow: 'hidden' },
+  catRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 10,
+    gap: 8,
+  },
+  catRowBorder: { borderTopWidth: 1, borderTopColor: Colors.border },
+  catDot: { width: 8, height: 8, borderRadius: 4, flexShrink: 0 },
+  catName: { ...Typography.bodySmall, fontWeight: '600' as const, width: 72 },
+  catBarWrap: { flex: 1 },
+  catBar: {
     height: 4,
     backgroundColor: Colors.border,
     borderRadius: 2,
     overflow: 'hidden',
   },
-  barFill: { height: '100%', borderRadius: 2 },
-  progress: { ...Typography.bodySmall },
-  completeBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingVertical: 7,
-    paddingHorizontal: Spacing.sm,
-    borderRadius: Radius.sm,
-    backgroundColor: Colors.primaryLight,
-    flexShrink: 0,
-  },
-  completeBtnText: {
-    ...Typography.bodySmall,
-    color: Colors.primary,
-    fontWeight: '600' as const,
-  },
-});
-
-const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: Colors.background },
+  catBarFill: { height: '100%', borderRadius: 2 },
+  catProgress: { ...Typography.bodySmall, minWidth: 34, textAlign: 'right' },
 
   // Empty state
-  emptyStateWrap: {
+  emptyWrap: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: Spacing.xl,
-    paddingBottom: Spacing.xxl,
+    paddingBottom: 60,
     gap: Spacing.md,
   },
-  emptyIconBox: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
+  emptyIcon: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
     backgroundColor: Colors.primaryLight,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: Spacing.xs,
+    marginBottom: 4,
   },
-  emptyStateTitle: { ...Typography.h2, textAlign: 'center' },
-  emptyStateBody: {
+  emptyTitle: { ...Typography.h2, textAlign: 'center' },
+  emptyBody: {
     ...Typography.body,
     color: Colors.textSecondary,
     textAlign: 'center',
     lineHeight: 22,
   },
-  emptyStateBtn: {
+  emptyBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
@@ -670,107 +562,55 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.lg,
     paddingVertical: 13,
     borderRadius: Radius.xl,
-    marginTop: Spacing.xs,
+    marginTop: 4,
   },
-  emptyStateBtnText: { color: Colors.surface, fontWeight: '700' as const, fontSize: 15 },
+  emptyBtnText: { color: Colors.surface, fontWeight: '700' as const, fontSize: 15 },
+});
 
-  // Layout
-  scroll: { flex: 1 },
-  content: { paddingHorizontal: Spacing.md, paddingBottom: Spacing.xl },
-  headerSection: { paddingTop: Spacing.lg, paddingBottom: Spacing.md },
-  greeting: { ...Typography.h1 },
-  subtitle: { ...Typography.bodySmall, marginTop: 2 },
-
-  card: { marginBottom: Spacing.sm },
-  cardHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: Spacing.sm, gap: 8 },
-  iconBox: {
-    width: 30,
-    height: 30,
-    borderRadius: Radius.sm,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  cardTitle: { ...Typography.h3, flex: 1 },
-
-  bigStatRow: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    gap: 4,
-    marginBottom: Spacing.sm,
-  },
-  bigStat: { fontSize: 36, fontWeight: '700' as const, color: Colors.primary },
-  bigStatDivider: { fontSize: 24, color: Colors.textSecondary, marginHorizontal: 2 },
-  bigStatTotal: { fontSize: 24, fontWeight: '600' as const, color: Colors.textSecondary },
-  bigStatLabel: { ...Typography.bodySmall, marginLeft: 4 },
-  barTrack: {
-    height: 8,
-    backgroundColor: Colors.border,
-    borderRadius: 4,
-    overflow: 'hidden',
-  },
-  barFill: { height: '100%', borderRadius: 4 },
-  progressNote: { ...Typography.bodySmall, marginTop: Spacing.xs },
-
-  motivationalRow: { marginTop: Spacing.sm },
-  motivationalBadge: {
-    alignSelf: 'flex-start',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: Radius.xl,
-  },
-  motivationalText: { fontSize: 12, fontWeight: '700' as const },
-  streakNote: { ...Typography.bodySmall, marginTop: Spacing.xs },
-
-  // Pinned section
-  pinnedEmptyCard: { paddingVertical: Spacing.sm },
-  pinnedEmptyRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  pinnedEmptyText: { ...Typography.bodySmall },
-
-  sectionHeader: {
+const row = StyleSheet.create({
+  container: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
-    marginBottom: Spacing.xs,
+    paddingRight: Spacing.sm,
+    minHeight: 58,
   },
-  sectionTitle: {
-    ...Typography.label,
-    textTransform: 'uppercase',
-    letterSpacing: 0.6,
-    color: Colors.primary,
-  },
-  sectionPill: {
+  border: { borderTopWidth: 1, borderTopColor: Colors.border },
+  stripe: { width: 3, alignSelf: 'stretch' },
+  body: { flex: 1, paddingVertical: 10, paddingHorizontal: Spacing.sm, gap: 3 },
+  topLine: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  name: { ...Typography.body, fontWeight: '600' as const, flex: 1 },
+  meta: { ...Typography.bodySmall },
+  btn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
     backgroundColor: Colors.primaryLight,
-    borderRadius: Radius.xl,
-    minWidth: 18,
-    height: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: Radius.sm,
+    flexShrink: 0,
   },
-  sectionPillText: { fontSize: 11, fontWeight: '700' as const, color: Colors.primary },
+  btnText: { ...Typography.bodySmall, color: Colors.primary, fontWeight: '600' as const },
+});
 
-  expandBtn: {
+const doneRow = StyleSheet.create({
+  container: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 4,
-    paddingVertical: Spacing.xs,
-    marginBottom: Spacing.sm,
+    paddingRight: Spacing.sm,
+    minHeight: 50,
+    opacity: 0.6,
   },
-  expandBtnText: {
-    ...Typography.bodySmall,
-    color: Colors.primary,
-    fontWeight: '600' as const,
-  },
-
-  // Today's Actions
-  actionsHeader: {
+  border: { borderTopWidth: 1, borderTopColor: Colors.border },
+  stripe: { width: 3, alignSelf: 'stretch' },
+  body: { flex: 1, paddingVertical: 8, paddingHorizontal: Spacing.sm, gap: 2 },
+  name: { ...Typography.body, fontWeight: '500' as const },
+  meta: { ...Typography.bodySmall },
+  doneChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    gap: 3,
+    flexShrink: 0,
   },
-  inlineSwitch: { marginLeft: Spacing.sm },
-
-  emptyNote: { ...Typography.bodySmall, fontStyle: 'italic' },
-  linkText: { color: Colors.primary, fontWeight: '600' as const, fontStyle: 'normal' },
+  doneText: { ...Typography.bodySmall, color: Colors.success, fontWeight: '600' as const },
 });

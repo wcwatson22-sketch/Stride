@@ -258,25 +258,6 @@ export function HabitFormModal({ visible, onClose, editingHabit }: HabitFormModa
             </TouchableOpacity>
           </View>
 
-          {/* Pin to Dashboard */}
-          <View style={styles.toggleRow}>
-            <View style={styles.toggleInfo}>
-              <View style={styles.toggleLabelRow}>
-                <Feather name="bookmark" size={14} color={Colors.primary} style={{ marginRight: 6 }} />
-                <Text style={styles.toggleLabel}>Pin to Dashboard</Text>
-              </View>
-              <Text style={styles.toggleSub}>
-                Pinned habits appear at the top of your Dashboard for quick access
-              </Text>
-            </View>
-            <Switch
-              value={isPinned}
-              onValueChange={setIsPinned}
-              trackColor={{ true: Colors.primary }}
-              thumbColor={Colors.surface}
-            />
-          </View>
-
           {/* Active status */}
           <View style={styles.toggleRow}>
             <View style={styles.toggleInfo}>

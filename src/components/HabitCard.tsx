@@ -73,11 +73,6 @@ export function HabitCard({ habit, onEdit, compact = false }: HabitCardProps) {
           {/* Name row: name + status badges */}
           <View style={styles.nameRow}>
             <Text style={styles.name} numberOfLines={1}>{habit.name}</Text>
-            {habit.isPinned && (
-              <View style={styles.pinnedBadge}>
-                <Feather name="bookmark" size={9} color={Colors.primary} />
-              </View>
-            )}
             {!habit.isActive && (
               <View style={styles.inactiveBadge}>
                 <Text style={styles.inactiveBadgeText}>Paused</Text>
@@ -156,14 +151,6 @@ const styles = StyleSheet.create({
   },
   name: { ...Typography.h3, flexShrink: 1 },
 
-  pinnedBadge: {
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-    backgroundColor: Colors.primaryLight,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   inactiveBadge: {
     backgroundColor: Colors.border,
     borderRadius: Radius.sm,

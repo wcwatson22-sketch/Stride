@@ -168,6 +168,50 @@ export function getCurrentStreak(
   return streak;
 }
 
+/** Overall progress across all active habits in their current period. */
+export function getOverallProgress(
+  habits: Habit[],
+  completions: HabitCompletion[],
+  now: Date = new Date()
+): { completed: number; total: number; percentage: number } {
+  const total = habits.length;
+  if (total === 0) return { completed: 0, total: 0, percentage: 0 };
+  const completed = habits.filter(
+    (h) => getHabitProgress(h, completions, now).done
+  ).length;
+  return { completed, total, percentage: completed / total };
+}
+
+export interface CategoryProgress {
+  category: string;
+  completed: number;
+  target: number;
+}
+
+/**
+ * Per-category aggregation of current-period progress across all active habits.
+ * Habits with no category are grouped under "Other".
+ */
+export function getCategorySnapshot(
+  habits: Habit[],
+  completions: HabitCompletion[],
+  now: Date = new Date()
+): CategoryProgress[] {
+  const map = new Map<string, { completed: number; target: number }>();
+  for (const habit of habits) {
+    const cat = habit.category || 'Other';
+    const { completed, target } = getHabitProgress(habit, completions, now);
+    const prev = map.get(cat) ?? { completed: 0, target: 0 };
+    map.set(cat, {
+      completed: prev.completed + Math.min(completed, target),
+      target: prev.target + target,
+    });
+  }
+  return Array.from(map.entries())
+    .map(([category, stats]) => ({ category, ...stats }))
+    .sort((a, b) => b.target - a.target);
+}
+
 /** Motivational label based on weekly consistency (0–1). */
 export function getMotivationalLabel(consistency: number): string {
   if (consistency >= 0.8) return 'Strong Week';
