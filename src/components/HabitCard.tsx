@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ViewStyle } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { Habit } from '../models/types';
 import { useHabits } from '../store/HabitContext';
@@ -12,10 +12,11 @@ import { StreakBadge } from './StreakBadge';
 interface HabitCardProps {
   habit: Habit;
   onEdit: (habit: Habit) => void;
+  onPress?: (habit: Habit) => void;
   compact?: boolean;
 }
 
-export function HabitCard({ habit, onEdit, compact = false }: HabitCardProps) {
+export function HabitCard({ habit, onEdit, onPress, compact = false }: HabitCardProps) {
   const { state, logCompletion } = useHabits();
   const { completed, target, percentage, done } = getHabitProgress(
     habit,
@@ -60,14 +61,14 @@ export function HabitCard({ habit, onEdit, compact = false }: HabitCardProps) {
   }
 
   // ── Full card ──────────────────────────────────────────────────────────────
-  return (
-    <Card
-      style={[
-        styles.card,
-        !habit.isActive && styles.cardInactive,
-        catDef ? { borderLeftWidth: 3, borderLeftColor: catDef.color } : null,
-      ]}
-    >
+  const cardStyle: ViewStyle[] = [
+    styles.card,
+    !habit.isActive && styles.cardInactive,
+    catDef ? { borderLeftWidth: 3, borderLeftColor: catDef.color } : null,
+  ].filter(Boolean) as ViewStyle[];
+
+  const cardBody = (
+    <Card style={cardStyle}>
       <View style={styles.header}>
         <View style={styles.info}>
           {/* Name row: name + status badges */}
@@ -133,6 +134,15 @@ export function HabitCard({ habit, onEdit, compact = false }: HabitCardProps) {
       )}
     </Card>
   );
+
+  if (onPress) {
+    return (
+      <TouchableOpacity onPress={() => onPress(habit)} activeOpacity={0.97}>
+        {cardBody}
+      </TouchableOpacity>
+    );
+  }
+  return cardBody;
 }
 
 const styles = StyleSheet.create({

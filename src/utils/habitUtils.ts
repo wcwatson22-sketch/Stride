@@ -168,6 +168,95 @@ export function getCurrentStreak(
   return streak;
 }
 
+/**
+ * Best (longest) streak ever achieved for a single habit.
+ * Walks from the earliest completion forward to today counting consecutive
+ * completed periods; returns the longest run found.
+ */
+export function getBestStreak(
+  habit: Habit,
+  completions: HabitCompletion[],
+  now: Date = new Date()
+): number {
+  const habitCompletions = completions.filter((c) => c.habitId === habit.id);
+  if (habitCompletions.length === 0) return 0;
+
+  const target = Math.max(1, habit.targetCount);
+  const earliestMs = Math.min(
+    ...habitCompletions.map((c) => new Date(c.completedAt).getTime())
+  );
+  const nowPeriodEnd = getPeriodEnd(habit, now);
+
+  let best = 0;
+  let run = 0;
+  let cursor = getPeriodStart(habit, new Date(earliestMs));
+
+  for (let i = 0; i < 3650 && cursor < nowPeriodEnd; i++) {
+    const count = getCompletedCountForPeriod(habit, completions, cursor);
+    if (count >= target) {
+      run++;
+      if (run > best) best = run;
+    } else {
+      run = 0;
+    }
+    cursor = getPeriodEnd(habit, cursor); // advance: periodEnd of current = start of next
+  }
+
+  return best;
+}
+
+export interface PeriodHistoryItem {
+  label: string;
+  status: 'complete' | 'missed' | 'current';
+  completed: number;
+  target: number;
+}
+
+/**
+ * Recent period history for a habit, returned oldest-first.
+ * Daily → last 7 days, Weekly → last 4 weeks, Monthly → last 6 months.
+ */
+export function getRecentHistory(
+  habit: Habit,
+  completions: HabitCompletion[],
+  now: Date = new Date()
+): PeriodHistoryItem[] {
+  const target = Math.max(1, habit.targetCount);
+  const periodCount =
+    habit.frequencyType === 'daily' ? 7 : habit.frequencyType === 'weekly' ? 4 : 6;
+  const currentPeriodStart = getPeriodStart(habit, now).getTime();
+
+  const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+                  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+  const items: PeriodHistoryItem[] = [];
+  let cursor = new Date(now);
+
+  for (let i = 0; i < periodCount; i++) {
+    const periodStart = getPeriodStart(habit, cursor);
+    const isCurrent = periodStart.getTime() === currentPeriodStart;
+    const count = getCompletedCountForPeriod(habit, completions, cursor);
+
+    const status: PeriodHistoryItem['status'] =
+      count >= target ? 'complete' : isCurrent ? 'current' : 'missed';
+
+    let label: string;
+    if (habit.frequencyType === 'daily') {
+      label = DAYS[periodStart.getDay()];
+    } else if (habit.frequencyType === 'weekly') {
+      label = i === 0 ? 'This wk' : i === 1 ? 'Last wk' : `${i}w ago`;
+    } else {
+      label = MONTHS[periodStart.getMonth()];
+    }
+
+    items.push({ label, status, completed: count, target });
+    cursor = getPreviousPeriodDate(habit, cursor);
+  }
+
+  return items.reverse(); // oldest first
+}
+
 /** Overall progress across all active habits in their current period. */
 export function getOverallProgress(
   habits: Habit[],

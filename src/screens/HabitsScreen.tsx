@@ -12,6 +12,7 @@ import { useHabits } from '../store/HabitContext';
 import { Habit, FrequencyType } from '../models/types';
 import { HabitCard } from '../components/HabitCard';
 import { HabitFormModal } from '../components/HabitFormModal';
+import { HabitDetailModal } from '../components/HabitDetailModal';
 import { Colors, Spacing, Typography, Radius } from '../theme';
 
 type FilterTab = 'all' | 'daily' | 'weekly' | 'monthly';
@@ -26,6 +27,7 @@ export function HabitsScreen() {
   const { state } = useHabits();
   const [modalVisible, setModalVisible] = useState(false);
   const [editingHabit, setEditingHabit] = useState<Habit | null>(null);
+  const [detailHabitId, setDetailHabitId] = useState<string | null>(null);
   const [filter, setFilter] = useState<FilterTab>('all');
   const [showInactive, setShowInactive] = useState(false);
 
@@ -117,12 +119,14 @@ export function HabitsScreen() {
           <GroupedHabitList
             habits={baseHabits}
             onEdit={openEdit}
+            onPress={(h) => setDetailHabitId(h.id)}
           />
         ) : (
           <FlatHabitList
             habits={baseHabits.filter((h) => h.frequencyType === filter)}
             frequencyLabel={filter}
             onEdit={openEdit}
+            onPress={(h) => setDetailHabitId(h.id)}
           />
         )}
 
@@ -134,6 +138,10 @@ export function HabitsScreen() {
         onClose={() => setModalVisible(false)}
         editingHabit={editingHabit}
       />
+      <HabitDetailModal
+        habitId={detailHabitId}
+        onClose={() => setDetailHabitId(null)}
+      />
     </SafeAreaView>
   );
 }
@@ -141,9 +149,11 @@ export function HabitsScreen() {
 function GroupedHabitList({
   habits,
   onEdit,
+  onPress,
 }: {
   habits: Habit[];
   onEdit: (h: Habit) => void;
+  onPress: (h: Habit) => void;
 }) {
   const activeHabits = habits.filter((h) => h.isActive);
   const pausedHabits = habits.filter((h) => !h.isActive);
@@ -163,7 +173,7 @@ function GroupedHabitList({
               </View>
             </View>
             {group.map((habit) => (
-              <HabitCard key={habit.id} habit={habit} onEdit={onEdit} />
+              <HabitCard key={habit.id} habit={habit} onEdit={onEdit} onPress={onPress} />
             ))}
           </View>
         );
@@ -181,7 +191,7 @@ function GroupedHabitList({
             </View>
           </View>
           {pausedHabits.map((habit) => (
-            <HabitCard key={habit.id} habit={habit} onEdit={onEdit} />
+            <HabitCard key={habit.id} habit={habit} onEdit={onEdit} onPress={onPress} />
           ))}
         </View>
       )}
@@ -193,10 +203,12 @@ function FlatHabitList({
   habits,
   frequencyLabel,
   onEdit,
+  onPress,
 }: {
   habits: Habit[];
   frequencyLabel: string;
   onEdit: (h: Habit) => void;
+  onPress: (h: Habit) => void;
 }) {
   if (habits.length === 0) {
     return (
@@ -210,7 +222,7 @@ function FlatHabitList({
   return (
     <>
       {habits.map((habit) => (
-        <HabitCard key={habit.id} habit={habit} onEdit={onEdit} />
+        <HabitCard key={habit.id} habit={habit} onEdit={onEdit} onPress={onPress} />
       ))}
     </>
   );

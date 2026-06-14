@@ -28,6 +28,7 @@ import { getCategoryDef } from '../constants/categories';
 import { Card } from '../components/Card';
 import { StreakBadge } from '../components/StreakBadge';
 import { HabitFormModal } from '../components/HabitFormModal';
+import { HabitDetailModal } from '../components/HabitDetailModal';
 import { Colors, Spacing, Typography, Radius } from '../theme';
 
 const ACTIONS_PREVIEW = 4;
@@ -49,6 +50,7 @@ export function DashboardScreen() {
   const [completedExpanded, setCompletedExpanded] = useState(false);
   const [addModalVisible, setAddModalVisible] = useState(false);
   const [undoState, setUndoState] = useState<UndoState | null>(null);
+  const [selectedHabitId, setSelectedHabitId] = useState<string | null>(null);
   const undoTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const activeHabits = habits.filter((h) => h.isActive);
@@ -179,6 +181,7 @@ export function DashboardScreen() {
                   completions={completions}
                   isFirst={idx === 0}
                   onComplete={() => handleComplete(item.habit)}
+                  onPress={() => setSelectedHabitId(item.habit.id)}
                 />
               ))}
 
@@ -223,7 +226,12 @@ export function DashboardScreen() {
               </TouchableOpacity>
               {completedExpanded &&
                 doneHabits.map((habit) => (
-                  <CompletedRow key={habit.id} habit={habit} completions={completions} />
+                  <CompletedRow
+                    key={habit.id}
+                    habit={habit}
+                    completions={completions}
+                    onPress={() => setSelectedHabitId(habit.id)}
+                  />
                 ))}
             </>
           )}
@@ -316,6 +324,12 @@ export function DashboardScreen() {
         <View style={{ height: Spacing.xl }} />
       </ScrollView>
 
+      {/* Habit detail modal */}
+      <HabitDetailModal
+        habitId={selectedHabitId}
+        onClose={() => setSelectedHabitId(null)}
+      />
+
       {/* Undo snackbar — sits above bottom edge, outside the scroll */}
       {undoState && (
         <View style={s.snackbar} pointerEvents="box-none">
@@ -381,9 +395,10 @@ interface ActionRowProps {
   completions: HabitCompletion[];
   isFirst: boolean;
   onComplete: () => void;
+  onPress: () => void;
 }
 
-function ActionRow({ item, completions, isFirst, onComplete }: ActionRowProps) {
+function ActionRow({ item, completions, isFirst, onComplete, onPress }: ActionRowProps) {
   const { habit, completed, target, period } = item;
   const catDef = habit.category ? getCategoryDef(habit.category) : null;
   const streak = getIndividualStreak(habit, completions);
@@ -391,43 +406,49 @@ function ActionRow({ item, completions, isFirst, onComplete }: ActionRowProps) {
   return (
     <View style={[row.container, !isFirst && row.border]}>
       <View style={[row.stripe, { backgroundColor: catDef?.color ?? Colors.border }]} />
-      <View style={row.body}>
-        {/* Top line: name (flex) + streak (fixed right) */}
+      {/* Tappable body area → opens detail */}
+      <TouchableOpacity style={row.body} onPress={onPress} activeOpacity={0.7}>
         <View style={row.topLine}>
           <Text style={row.name} numberOfLines={1}>{habit.name}</Text>
           <StreakBadge streak={streak} habit={habit} />
         </View>
-        {/* Bottom line: meta (flex) + complete button (fixed right) */}
-        <View style={row.bottomLine}>
-          <Text style={row.meta} numberOfLines={1}>
-            {habit.category ? `${habit.category} · ` : ''}
-            {completed}/{target} {period}
-          </Text>
-          <TouchableOpacity
-            style={row.btn}
-            onPress={onComplete}
-            activeOpacity={0.75}
-            hitSlop={6}
-          >
-            <Feather name="plus" size={12} color={Colors.primary} />
-            <Text style={row.btnText}>Complete</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
+        <Text style={row.meta} numberOfLines={1}>
+          {habit.category ? `${habit.category} · ` : ''}
+          {completed}/{target} {period}
+        </Text>
+      </TouchableOpacity>
+      {/* Complete button — separate touch target */}
+      <TouchableOpacity
+        style={row.btn}
+        onPress={onComplete}
+        activeOpacity={0.75}
+        hitSlop={6}
+      >
+        <Feather name="plus" size={12} color={Colors.primary} />
+        <Text style={row.btnText}>Complete</Text>
+      </TouchableOpacity>
     </View>
   );
 }
 
 // ── Completed Row ──────────────────────────────────────────────────────────────
 
-function CompletedRow({ habit, completions }: { habit: Habit; completions: HabitCompletion[] }) {
+function CompletedRow({
+  habit,
+  completions,
+  onPress,
+}: {
+  habit: Habit;
+  completions: HabitCompletion[];
+  onPress: () => void;
+}) {
   const { completed, target } = getHabitProgress(habit, completions);
   const period = periodLabel(habit);
   const catDef = habit.category ? getCategoryDef(habit.category) : null;
   const streak = getIndividualStreak(habit, completions);
 
   return (
-    <View style={[done.container, done.border]}>
+    <TouchableOpacity style={[done.container, done.border]} onPress={onPress} activeOpacity={0.7}>
       <View style={[done.stripe, { backgroundColor: catDef?.color ?? Colors.border }]} />
       <View style={done.body}>
         <View style={done.topLine}>
@@ -443,7 +464,7 @@ function CompletedRow({ habit, completions }: { habit: Habit; completions: Habit
         <Feather name="check" size={11} color={Colors.success} />
         <Text style={done.doneText}>Done</Text>
       </View>
-    </View>
+    </TouchableOpacity>
   );
 }
 
