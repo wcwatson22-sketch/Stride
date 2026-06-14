@@ -75,6 +75,16 @@ function generateId(): string {
   return Math.random().toString(36).slice(2) + Date.now().toString(36);
 }
 
+/** Migrate a raw habit record from AsyncStorage to the current model shape. */
+function migrateHabit(raw: any): Habit {
+  return {
+    showOnDashboard: false,
+    ...raw,
+    // isPinned migrates from legacy showOnDashboard if not already set
+    isPinned: raw.isPinned ?? raw.showOnDashboard ?? false,
+  };
+}
+
 export function HabitProvider({ children }: { children: React.ReactNode }) {
   const [state, dispatch] = useReducer(reducer, defaultState);
 
@@ -89,11 +99,11 @@ export function HabitProvider({ children }: { children: React.ReactNode }) {
         dispatch({
           type: 'LOAD',
           payload: {
-            habits: habitsRaw ? JSON.parse(habitsRaw) : [],
+            habits: habitsRaw
+              ? (JSON.parse(habitsRaw) as any[]).map(migrateHabit)
+              : [],
             completions: completionsRaw ? JSON.parse(completionsRaw) : [],
-            settings: settingsRaw
-              ? JSON.parse(settingsRaw)
-              : defaultState.settings,
+            settings: settingsRaw ? JSON.parse(settingsRaw) : defaultState.settings,
             loaded: true,
           },
         });

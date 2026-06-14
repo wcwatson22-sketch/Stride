@@ -6,7 +6,8 @@ export interface Habit {
   category: string;
   frequencyType: FrequencyType;
   targetCount: number;
-  showOnDashboard: boolean;
+  isPinned: boolean;       // pinned to dashboard; replaces showOnDashboard
+  showOnDashboard: boolean; // kept for migration compatibility
   isActive: boolean;
   createdAt: string;
   updatedAt: string;

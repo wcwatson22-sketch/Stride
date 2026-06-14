@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -11,26 +11,47 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useHabits } from '../store/HabitContext';
+import { Habit } from '../models/types';
 import {
   getTodayStats,
   getWeeklyConsistency,
   getCurrentStreak,
   getMotivationalLabel,
   getDueHabits,
+  getHabitProgress,
+  periodLabel,
   DueHabit,
 } from '../utils/habitUtils';
+import { getCategoryDef } from '../constants/categories';
 import { Card } from '../components/Card';
 import { HabitCard } from '../components/HabitCard';
 import { Colors, Spacing, Typography, Radius } from '../theme';
+
+const PINNED_PREVIEW_COUNT = 2;
 
 export function DashboardScreen() {
   const navigation = useNavigation();
   const { state, updateSettings, logCompletion } = useHabits();
   const { habits, completions, settings } = state;
 
+  const [pinnedExpanded, setPinnedExpanded] = useState(false);
+
   const activeHabits = habits.filter((h) => h.isActive);
   const dailyActiveHabits = activeHabits.filter((h) => h.frequencyType === 'daily');
   const hasHabits = habits.length > 0;
+
+  // Pinned: active habits with isPinned true, sorted daily → weekly → monthly
+  const pinnedHabits = activeHabits
+    .filter((h) => h.isPinned)
+    .sort((a, b) => {
+      const order = { daily: 0, weekly: 1, monthly: 2 };
+      return order[a.frequencyType] - order[b.frequencyType];
+    });
+
+  const visiblePinned = pinnedExpanded
+    ? pinnedHabits
+    : pinnedHabits.slice(0, PINNED_PREVIEW_COUNT);
+  const hiddenPinnedCount = pinnedHabits.length - PINNED_PREVIEW_COUNT;
 
   const todayStats = getTodayStats(activeHabits, completions);
   const weeklyConsistency = getWeeklyConsistency(activeHabits, completions);
@@ -40,7 +61,6 @@ export function DashboardScreen() {
 
   const remaining = todayStats.totalActions - todayStats.completedActions;
   const showDetails = settings.showIndividualHabitsOnDashboard;
-  const dashboardHabits = activeHabits.filter((h) => h.showOnDashboard);
 
   const greeting = getGreeting();
 
@@ -48,7 +68,7 @@ export function DashboardScreen() {
     navigation.navigate('Habits' as never);
   }
 
-  // ── No habits yet: full empty state ────────────────────────────────────────
+  // ── No habits yet ───────────────────────────────────────────────────────────
   if (!hasHabits) {
     return (
       <SafeAreaView style={styles.safe} edges={['top']}>
@@ -86,7 +106,7 @@ export function DashboardScreen() {
           <Text style={styles.subtitle}>Here's how you're doing</Text>
         </View>
 
-        {/* Today's Progress — aggregate bar, always visible */}
+        {/* ── Today's Progress ─────────────────────────────────────────────── */}
         <Card style={styles.card}>
           <View style={styles.cardHeader}>
             <View style={[styles.iconBox, { backgroundColor: Colors.primaryLight }]}>
@@ -132,7 +152,59 @@ export function DashboardScreen() {
           )}
         </Card>
 
-        {/* Weekly Consistency — always visible */}
+        {/* ── Pinned Habits ────────────────────────────────────────────────── */}
+        {pinnedHabits.length === 0 ? (
+          <Card style={[styles.card, styles.pinnedEmptyCard]}>
+            <View style={styles.pinnedEmptyRow}>
+              <Feather name="bookmark" size={14} color={Colors.textMuted} />
+              <Text style={styles.pinnedEmptyText}>
+                No pinned habits.{' '}
+                <Text style={styles.linkText} onPress={goToHabits}>Pin a habit →</Text>
+              </Text>
+            </View>
+          </Card>
+        ) : (
+          <View>
+            <View style={styles.sectionHeader}>
+              <Feather name="bookmark" size={12} color={Colors.primary} />
+              <Text style={styles.sectionTitle}>Pinned</Text>
+              <View style={styles.sectionPill}>
+                <Text style={styles.sectionPillText}>{pinnedHabits.length}</Text>
+              </View>
+            </View>
+
+            {visiblePinned.map((habit) => (
+              <PinnedHabitCard
+                key={habit.id}
+                habit={habit}
+                completions={completions}
+                onComplete={() => logCompletion(habit.id)}
+              />
+            ))}
+
+            {/* Expand / collapse control */}
+            {pinnedHabits.length > PINNED_PREVIEW_COUNT && (
+              <TouchableOpacity
+                style={styles.expandBtn}
+                onPress={() => setPinnedExpanded((v) => !v)}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.expandBtnText}>
+                  {pinnedExpanded
+                    ? 'Show Less'
+                    : `Show ${hiddenPinnedCount} More`}
+                </Text>
+                <Feather
+                  name={pinnedExpanded ? 'chevron-up' : 'chevron-down'}
+                  size={14}
+                  color={Colors.primary}
+                />
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
+
+        {/* ── Weekly Consistency ───────────────────────────────────────────── */}
         <Card style={styles.card}>
           <View style={styles.cardHeader}>
             <View style={[styles.iconBox, { backgroundColor: Colors.successLight }]}>
@@ -173,7 +245,7 @@ export function DashboardScreen() {
           </View>
         </Card>
 
-        {/* Momentum — only shown when daily habits exist (streak is meaningful) */}
+        {/* ── Momentum ─────────────────────────────────────────────────────── */}
         {dailyActiveHabits.length > 0 && (
           <Card style={styles.card}>
             <View style={styles.cardHeader}>
@@ -196,9 +268,7 @@ export function DashboardScreen() {
               <>
                 <View style={styles.bigStatRow}>
                   <Text style={[styles.bigStat, { color: Colors.warning }]}>{streak}</Text>
-                  <Text style={styles.bigStatLabel}>
-                    {streak === 1 ? 'day streak' : 'day streak'}
-                  </Text>
+                  <Text style={styles.bigStatLabel}>day streak</Text>
                 </View>
                 <Text style={styles.streakNote}>
                   {streak < 3
@@ -212,8 +282,7 @@ export function DashboardScreen() {
           </Card>
         )}
 
-        {/* ── Today's Actions card ──────────────────────────────────────────── */}
-        {/* Always visible. Shows aggregate when details are hidden, individual rows when on. */}
+        {/* ── Today's Actions ──────────────────────────────────────────────── */}
         <Card style={styles.card}>
           <View style={styles.actionsHeader}>
             <View style={styles.cardHeader}>
@@ -222,7 +291,6 @@ export function DashboardScreen() {
               </View>
               <Text style={styles.cardTitle}>Today's Actions</Text>
             </View>
-            {/* Inline toggle */}
             <Switch
               value={showDetails}
               onValueChange={(v) => updateSettings({ showIndividualHabitsOnDashboard: v })}
@@ -232,17 +300,13 @@ export function DashboardScreen() {
             />
           </View>
 
-          {/* Toggle OFF — aggregate only, no habit names */}
           {!showDetails && (
             <ActionsAggregate
               todayStats={todayStats}
-              dueCount={dueHabits.length}
               remaining={remaining}
               onViewHabits={goToHabits}
             />
           )}
-
-          {/* Toggle ON — individual due habit rows */}
           {showDetails && (
             <ActionDetails
               dueHabits={dueHabits}
@@ -251,29 +315,86 @@ export function DashboardScreen() {
           )}
         </Card>
 
-        {/* Individual habit progress cards — only when details are on and habits opted in */}
-        {showDetails && dashboardHabits.length > 0 && (
-          <View>
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Individual Progress</Text>
-            </View>
-            {dashboardHabits.map((habit) => (
-              <HabitCard key={habit.id} habit={habit} onEdit={() => {}} compact />
-            ))}
-          </View>
-        )}
-
         <View style={{ height: Spacing.xl }} />
       </ScrollView>
     </SafeAreaView>
   );
 }
 
-// ── Sub-components ─────────────────────────────────────────────────────────────
+// ── Pinned Habit Card ──────────────────────────────────────────────────────────
+
+interface PinnedHabitCardProps {
+  habit: Habit;
+  completions: ReturnType<typeof useHabits>['state']['completions'];
+  onComplete: () => void;
+}
+
+function PinnedHabitCard({ habit, completions, onComplete }: PinnedHabitCardProps) {
+  const { completed, target, percentage, done } = getHabitProgress(habit, completions);
+  const period = periodLabel(habit);
+  const catDef = habit.category ? getCategoryDef(habit.category) : null;
+
+  return (
+    <Card
+      style={[
+        pinnedStyles.card,
+        catDef ? { borderLeftWidth: 3, borderLeftColor: catDef.color } : null,
+      ]}
+    >
+      <View style={pinnedStyles.row}>
+        {/* Left: name + meta */}
+        <View style={pinnedStyles.info}>
+          <View style={pinnedStyles.nameRow}>
+            {catDef && <View style={[pinnedStyles.dot, { backgroundColor: catDef.color }]} />}
+            <Text style={pinnedStyles.name} numberOfLines={1}>{habit.name}</Text>
+          </View>
+          <View style={pinnedStyles.metaRow}>
+            {catDef && (
+              <Text style={[pinnedStyles.catLabel, { color: catDef.color }]}>
+                {habit.category}
+              </Text>
+            )}
+            <Text style={pinnedStyles.progressText}>
+              {completed}/{target} {period}
+            </Text>
+          </View>
+          <View style={pinnedStyles.barTrack}>
+            <View
+              style={[
+                pinnedStyles.barFill,
+                {
+                  width: `${percentage * 100}%`,
+                  backgroundColor: done ? Colors.success : (catDef?.color ?? Colors.primary),
+                },
+              ]}
+            />
+          </View>
+        </View>
+
+        {/* Right: action */}
+        {done ? (
+          <View style={pinnedStyles.doneBox}>
+            <Feather name="check-circle" size={20} color={Colors.success} />
+          </View>
+        ) : (
+          <TouchableOpacity
+            style={pinnedStyles.completeBtn}
+            onPress={onComplete}
+            activeOpacity={0.75}
+          >
+            <Feather name="plus" size={14} color={Colors.primary} />
+            <Text style={pinnedStyles.completeBtnText}>Complete</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+    </Card>
+  );
+}
+
+// ── Today's Actions sub-components ────────────────────────────────────────────
 
 interface ActionsAggregateProps {
   todayStats: { completedActions: number; totalActions: number; percentage: number };
-  dueCount: number;
   remaining: number;
   onViewHabits: () => void;
 }
@@ -289,7 +410,6 @@ function ActionsAggregate({ todayStats, remaining, onViewHabits }: ActionsAggreg
       </View>
     );
   }
-
   if (todayStats.percentage >= 1) {
     return (
       <View style={aggStyles.wrap}>
@@ -300,7 +420,6 @@ function ActionsAggregate({ todayStats, remaining, onViewHabits }: ActionsAggreg
       </View>
     );
   }
-
   return (
     <View style={aggStyles.wrap}>
       <View style={aggStyles.statRow}>
@@ -353,12 +472,22 @@ interface DueHabitRowProps {
 function DueHabitRow({ item, onComplete }: DueHabitRowProps) {
   const { habit, completed, target, period } = item;
   const pct = Math.min(1, completed / Math.max(1, target));
+  const catDef = habit.category ? getCategoryDef(habit.category) : null;
+
   return (
     <View style={dueStyles.row}>
       <View style={dueStyles.info}>
-        <Text style={dueStyles.name} numberOfLines={1}>{habit.name}</Text>
+        <View style={dueStyles.nameRow}>
+          {catDef && <View style={[dueStyles.dot, { backgroundColor: catDef.color }]} />}
+          <Text style={dueStyles.name} numberOfLines={1}>{habit.name}</Text>
+        </View>
         <View style={dueStyles.barTrack}>
-          <View style={[dueStyles.barFill, { width: `${pct * 100}%` }]} />
+          <View
+            style={[
+              dueStyles.barFill,
+              { width: `${pct * 100}%`, backgroundColor: catDef?.color ?? Colors.primary },
+            ]}
+          />
         </View>
         <Text style={dueStyles.progress}>
           {completed}/{target} {period}
@@ -376,6 +505,8 @@ function DueHabitRow({ item, onComplete }: DueHabitRowProps) {
   );
 }
 
+// ── Helpers ────────────────────────────────────────────────────────────────────
+
 function motivationalColor(consistency: number): string {
   if (consistency >= 0.8) return Colors.success;
   if (consistency >= 0.5) return Colors.warning;
@@ -391,6 +522,46 @@ function getGreeting(): string {
 }
 
 // ── Styles ─────────────────────────────────────────────────────────────────────
+
+const pinnedStyles = StyleSheet.create({
+  card: { marginBottom: Spacing.xs },
+  row: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
+  info: { flex: 1 },
+  nameRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 3 },
+  dot: { width: 8, height: 8, borderRadius: 4, flexShrink: 0 },
+  name: { ...Typography.body, fontWeight: '600' as const, flexShrink: 1 },
+  metaRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 },
+  catLabel: { fontSize: 11, fontWeight: '600' as const },
+  progressText: { ...Typography.bodySmall },
+  barTrack: {
+    height: 4,
+    backgroundColor: Colors.border,
+    borderRadius: 2,
+    overflow: 'hidden',
+  },
+  barFill: { height: '100%', borderRadius: 2 },
+  completeBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: 7,
+    paddingHorizontal: 10,
+    borderRadius: Radius.sm,
+    backgroundColor: Colors.primaryLight,
+    flexShrink: 0,
+  },
+  completeBtnText: {
+    ...Typography.bodySmall,
+    color: Colors.primary,
+    fontWeight: '600' as const,
+  },
+  doneBox: {
+    width: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+});
 
 const aggStyles = StyleSheet.create({
   wrap: { gap: Spacing.sm },
@@ -420,18 +591,16 @@ const dueStyles = StyleSheet.create({
     borderTopColor: Colors.border,
   },
   info: { flex: 1, gap: 4 },
-  name: { ...Typography.body, fontWeight: '500' as const },
+  nameRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  dot: { width: 7, height: 7, borderRadius: 3.5, flexShrink: 0 },
+  name: { ...Typography.body, fontWeight: '500' as const, flexShrink: 1 },
   barTrack: {
     height: 4,
     backgroundColor: Colors.border,
     borderRadius: 2,
     overflow: 'hidden',
   },
-  barFill: {
-    height: '100%',
-    borderRadius: 2,
-    backgroundColor: Colors.primary,
-  },
+  barFill: { height: '100%', borderRadius: 2 },
   progress: { ...Typography.bodySmall },
   completeBtn: {
     flexDirection: 'row',
@@ -471,10 +640,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginBottom: Spacing.xs,
   },
-  emptyStateTitle: {
-    ...Typography.h2,
-    textAlign: 'center',
-  },
+  emptyStateTitle: { ...Typography.h2, textAlign: 'center' },
   emptyStateBody: {
     ...Typography.body,
     color: Colors.textSecondary,
@@ -491,13 +657,9 @@ const styles = StyleSheet.create({
     borderRadius: Radius.xl,
     marginTop: Spacing.xs,
   },
-  emptyStateBtnText: {
-    color: Colors.surface,
-    fontWeight: '700' as const,
-    fontSize: 15,
-  },
+  emptyStateBtnText: { color: Colors.surface, fontWeight: '700' as const, fontSize: 15 },
 
-  // Normal layout
+  // Layout
   scroll: { flex: 1 },
   content: { paddingHorizontal: Spacing.md, paddingBottom: Spacing.xl },
   headerSection: { paddingTop: Spacing.lg, paddingBottom: Spacing.md },
@@ -532,10 +694,8 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   barFill: { height: '100%', borderRadius: 4 },
-  progressNote: {
-    ...Typography.bodySmall,
-    marginTop: Spacing.xs,
-  },
+  progressNote: { ...Typography.bodySmall, marginTop: Spacing.xs },
+
   motivationalRow: { marginTop: Spacing.sm },
   motivationalBadge: {
     alignSelf: 'flex-start',
@@ -546,7 +706,49 @@ const styles = StyleSheet.create({
   motivationalText: { fontSize: 12, fontWeight: '700' as const },
   streakNote: { ...Typography.bodySmall, marginTop: Spacing.xs },
 
-  // Today's Actions card header (title + inline switch)
+  // Pinned section
+  pinnedEmptyCard: { paddingVertical: Spacing.sm },
+  pinnedEmptyRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  pinnedEmptyText: { ...Typography.bodySmall },
+
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    marginBottom: Spacing.xs,
+  },
+  sectionTitle: {
+    ...Typography.label,
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+    color: Colors.primary,
+  },
+  sectionPill: {
+    backgroundColor: Colors.primaryLight,
+    borderRadius: Radius.xl,
+    minWidth: 18,
+    height: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 5,
+  },
+  sectionPillText: { fontSize: 11, fontWeight: '700' as const, color: Colors.primary },
+
+  expandBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    paddingVertical: Spacing.xs,
+    marginBottom: Spacing.sm,
+  },
+  expandBtnText: {
+    ...Typography.bodySmall,
+    color: Colors.primary,
+    fontWeight: '600' as const,
+  },
+
+  // Today's Actions
   actionsHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -554,19 +756,6 @@ const styles = StyleSheet.create({
   },
   inlineSwitch: { marginLeft: Spacing.sm },
 
-  sectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.xs,
-    marginTop: Spacing.sm,
-    marginBottom: Spacing.xs,
-  },
-  sectionTitle: {
-    ...Typography.label,
-    textTransform: 'uppercase',
-    letterSpacing: 0.6,
-    color: Colors.textSecondary,
-  },
   emptyNote: { ...Typography.bodySmall, fontStyle: 'italic' },
   linkText: { color: Colors.primary, fontWeight: '600' as const, fontStyle: 'normal' },
 });

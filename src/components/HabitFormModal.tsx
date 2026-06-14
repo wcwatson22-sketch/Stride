@@ -15,6 +15,7 @@ import {
 import { Feather } from '@expo/vector-icons';
 import { Habit, FrequencyType } from '../models/types';
 import { useHabits } from '../store/HabitContext';
+import { CATEGORIES } from '../constants/categories';
 import { Colors, Spacing, Radius, Typography } from '../theme';
 
 interface HabitFormModalProps {
@@ -29,12 +30,9 @@ const FREQUENCY_OPTIONS: { label: string; value: FrequencyType }[] = [
   { label: 'Monthly', value: 'monthly' },
 ];
 
-const CATEGORIES = ['Health', 'Fitness', 'Family', 'Spiritual', 'Learning', 'Other'];
-
 export function HabitFormModal({ visible, onClose, editingHabit }: HabitFormModalProps) {
   const { state, addHabit, updateHabit, deleteHabit } = useHabits();
 
-  // Check if the habit has any completion history
   const hasCompletions = editingHabit
     ? state.completions.some((c) => c.habitId === editingHabit.id)
     : false;
@@ -43,7 +41,7 @@ export function HabitFormModal({ visible, onClose, editingHabit }: HabitFormModa
   const [category, setCategory] = useState('');
   const [frequencyType, setFrequencyType] = useState<FrequencyType>('daily');
   const [targetCount, setTargetCount] = useState('1');
-  const [showOnDashboard, setShowOnDashboard] = useState(false);
+  const [isPinned, setIsPinned] = useState(false);
   const [isActive, setIsActive] = useState(true);
 
   useEffect(() => {
@@ -52,14 +50,14 @@ export function HabitFormModal({ visible, onClose, editingHabit }: HabitFormModa
       setCategory(editingHabit.category);
       setFrequencyType(editingHabit.frequencyType);
       setTargetCount(String(editingHabit.targetCount));
-      setShowOnDashboard(editingHabit.showOnDashboard);
+      setIsPinned(editingHabit.isPinned ?? editingHabit.showOnDashboard ?? false);
       setIsActive(editingHabit.isActive);
     } else {
       setName('');
       setCategory('');
       setFrequencyType('daily');
       setTargetCount('1');
-      setShowOnDashboard(false);
+      setIsPinned(false);
       setIsActive(true);
     }
   }, [editingHabit, visible]);
@@ -72,7 +70,8 @@ export function HabitFormModal({ visible, onClose, editingHabit }: HabitFormModa
       category,
       frequencyType,
       targetCount: count,
-      showOnDashboard,
+      isPinned,
+      showOnDashboard: isPinned, // keep in sync for backward compat
       isActive,
     };
     if (editingHabit) {
@@ -97,10 +96,7 @@ export function HabitFormModal({ visible, onClose, editingHabit }: HabitFormModa
         'This habit has completion history. Deleting it will permanently remove all its records.\n\nConsider archiving it instead to preserve your history.',
         [
           { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Archive Instead',
-            onPress: () => { handleArchive(); },
-          },
+          { text: 'Archive Instead', onPress: handleArchive },
           {
             text: 'Delete Permanently',
             style: 'destructive',
@@ -124,12 +120,20 @@ export function HabitFormModal({ visible, onClose, editingHabit }: HabitFormModa
     }
   }
 
+  const selectedCat = CATEGORIES.find((c) => c.name === category);
+
   return (
-    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
+    <Modal
+      visible={visible}
+      animationType="slide"
+      presentationStyle="pageSheet"
+      onRequestClose={onClose}
+    >
       <KeyboardAvoidingView
         style={styles.container}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
+        {/* Header */}
         <View style={styles.header}>
           <TouchableOpacity onPress={onClose} hitSlop={8}>
             <Feather name="x" size={22} color={Colors.textSecondary} />
@@ -141,6 +145,7 @@ export function HabitFormModal({ visible, onClose, editingHabit }: HabitFormModa
         </View>
 
         <ScrollView style={styles.form} keyboardShouldPersistTaps="handled">
+          {/* Name */}
           <Text style={styles.label}>Habit name</Text>
           <TextInput
             style={styles.input}
@@ -151,21 +156,59 @@ export function HabitFormModal({ visible, onClose, editingHabit }: HabitFormModa
             autoFocus
           />
 
-          <Text style={styles.label}>Category (optional)</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chips}>
-            {CATEGORIES.map((cat) => (
-              <TouchableOpacity
-                key={cat}
-                style={[styles.chip, category === cat && styles.chipActive]}
-                onPress={() => setCategory(category === cat ? '' : cat)}
-              >
-                <Text style={[styles.chipText, category === cat && styles.chipTextActive]}>
-                  {cat}
-                </Text>
-              </TouchableOpacity>
-            ))}
+          {/* Category */}
+          <Text style={styles.label}>Category</Text>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.catScroll}
+          >
+            {/* "None" chip */}
+            <TouchableOpacity
+              style={[styles.catChip, !category && styles.catChipSelected]}
+              onPress={() => setCategory('')}
+            >
+              <Text style={[styles.catChipText, !category && styles.catChipTextSelected]}>
+                None
+              </Text>
+            </TouchableOpacity>
+
+            {CATEGORIES.map((cat) => {
+              const selected = category === cat.name;
+              return (
+                <TouchableOpacity
+                  key={cat.name}
+                  style={[
+                    styles.catChip,
+                    selected && { borderColor: cat.color, backgroundColor: cat.lightBg },
+                  ]}
+                  onPress={() => setCategory(selected ? '' : cat.name)}
+                >
+                  <View style={[styles.catChipDot, { backgroundColor: cat.color }]} />
+                  <Text
+                    style={[
+                      styles.catChipText,
+                      selected && { color: cat.color, fontWeight: '600' as const },
+                    ]}
+                  >
+                    {cat.name}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
           </ScrollView>
 
+          {/* Selected category preview */}
+          {selectedCat && (
+            <View style={[styles.catPreview, { backgroundColor: selectedCat.lightBg }]}>
+              <View style={[styles.catPreviewDot, { backgroundColor: selectedCat.color }]} />
+              <Text style={[styles.catPreviewText, { color: selectedCat.color }]}>
+                {selectedCat.name}
+              </Text>
+            </View>
+          )}
+
+          {/* Frequency */}
           <Text style={styles.label}>Frequency</Text>
           <View style={styles.freqRow}>
             {FREQUENCY_OPTIONS.map((opt) => (
@@ -186,6 +229,7 @@ export function HabitFormModal({ visible, onClose, editingHabit }: HabitFormModa
             ))}
           </View>
 
+          {/* Target count */}
           <Text style={styles.label}>
             Target count per{' '}
             {frequencyType === 'daily' ? 'day' : frequencyType === 'weekly' ? 'week' : 'month'}
@@ -193,7 +237,9 @@ export function HabitFormModal({ visible, onClose, editingHabit }: HabitFormModa
           <View style={styles.counterRow}>
             <TouchableOpacity
               style={styles.counterBtn}
-              onPress={() => setTargetCount(String(Math.max(1, (parseInt(targetCount) || 1) - 1)))}
+              onPress={() =>
+                setTargetCount(String(Math.max(1, (parseInt(targetCount) || 1) - 1)))
+              }
             >
               <Feather name="minus" size={18} color={Colors.primary} />
             </TouchableOpacity>
@@ -212,21 +258,28 @@ export function HabitFormModal({ visible, onClose, editingHabit }: HabitFormModa
             </TouchableOpacity>
           </View>
 
+          {/* Pin to Dashboard */}
           <View style={styles.toggleRow}>
-            <View>
-              <Text style={styles.toggleLabel}>Show on Dashboard</Text>
-              <Text style={styles.toggleSub}>Display this habit individually on your dashboard</Text>
+            <View style={styles.toggleInfo}>
+              <View style={styles.toggleLabelRow}>
+                <Feather name="bookmark" size={14} color={Colors.primary} style={{ marginRight: 6 }} />
+                <Text style={styles.toggleLabel}>Pin to Dashboard</Text>
+              </View>
+              <Text style={styles.toggleSub}>
+                Pinned habits appear at the top of your Dashboard for quick access
+              </Text>
             </View>
             <Switch
-              value={showOnDashboard}
-              onValueChange={setShowOnDashboard}
+              value={isPinned}
+              onValueChange={setIsPinned}
               trackColor={{ true: Colors.primary }}
               thumbColor={Colors.surface}
             />
           </View>
 
+          {/* Active status */}
           <View style={styles.toggleRow}>
-            <View>
+            <View style={styles.toggleInfo}>
               <Text style={styles.toggleLabel}>Active</Text>
               <Text style={styles.toggleSub}>Inactive habits are hidden from your daily view</Text>
             </View>
@@ -238,6 +291,7 @@ export function HabitFormModal({ visible, onClose, editingHabit }: HabitFormModa
             />
           </View>
 
+          {/* Danger zone */}
           {editingHabit && (
             <View style={styles.dangerSection}>
               {editingHabit.isActive && (
@@ -275,8 +329,10 @@ const styles = StyleSheet.create({
   },
   title: { ...Typography.h3 },
   saveBtn: { ...Typography.body, color: Colors.primary, fontWeight: '600' as const },
+
   form: { flex: 1, paddingHorizontal: Spacing.md, paddingTop: Spacing.lg },
   label: { ...Typography.label, marginBottom: Spacing.xs, marginTop: Spacing.md },
+
   input: {
     backgroundColor: Colors.surface,
     borderRadius: Radius.md,
@@ -286,19 +342,42 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     ...Typography.body,
   },
-  chips: { flexDirection: 'row', marginBottom: Spacing.xs },
-  chip: {
+
+  // Category chips
+  catScroll: { gap: Spacing.xs, paddingVertical: 2 },
+  catChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
     borderRadius: Radius.xl,
     borderWidth: 1,
     borderColor: Colors.border,
     paddingHorizontal: Spacing.md,
-    paddingVertical: 6,
-    marginRight: Spacing.xs,
+    paddingVertical: 7,
     backgroundColor: Colors.surface,
   },
-  chipActive: { borderColor: Colors.primary, backgroundColor: Colors.primaryLight },
-  chipText: { ...Typography.bodySmall },
-  chipTextActive: { color: Colors.primary, fontWeight: '600' as const },
+  catChipSelected: {
+    borderColor: Colors.primary,
+    backgroundColor: Colors.primaryLight,
+  },
+  catChipDot: { width: 7, height: 7, borderRadius: 3.5 },
+  catChipText: { ...Typography.bodySmall },
+  catChipTextSelected: { color: Colors.primary, fontWeight: '600' as const },
+
+  catPreview: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: Spacing.xs,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: Radius.sm,
+    alignSelf: 'flex-start',
+  },
+  catPreviewDot: { width: 8, height: 8, borderRadius: 4 },
+  catPreviewText: { fontSize: 12, fontWeight: '600' as const },
+
+  // Frequency
   freqRow: { flexDirection: 'row', gap: Spacing.xs },
   freqBtn: {
     flex: 1,
@@ -312,11 +391,9 @@ const styles = StyleSheet.create({
   freqBtnActive: { borderColor: Colors.primary, backgroundColor: Colors.primaryLight },
   freqBtnText: { ...Typography.bodySmall },
   freqBtnTextActive: { color: Colors.primary, fontWeight: '600' as const },
-  counterRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.sm,
-  },
+
+  // Counter
+  counterRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
   counterBtn: {
     width: 44,
     height: 44,
@@ -335,6 +412,8 @@ const styles = StyleSheet.create({
     ...Typography.h3,
     textAlign: 'center',
   },
+
+  // Toggles
   toggleRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -343,8 +422,12 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
   },
-  toggleLabel: { ...Typography.body, fontWeight: '500' as const, marginBottom: 2 },
-  toggleSub: { ...Typography.bodySmall, maxWidth: '80%' },
+  toggleInfo: { flex: 1, marginRight: Spacing.md },
+  toggleLabelRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 2 },
+  toggleLabel: { ...Typography.body, fontWeight: '500' as const },
+  toggleSub: { ...Typography.bodySmall, maxWidth: '90%' },
+
+  // Danger
   dangerSection: { marginTop: Spacing.xl, gap: Spacing.sm },
   archiveBtn: {
     flexDirection: 'row',
