@@ -3,10 +3,11 @@ import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { Habit } from '../models/types';
 import { useHabits } from '../store/HabitContext';
-import { getHabitProgress, frequencyLabel, periodLabel } from '../utils/habitUtils';
+import { getHabitProgress, frequencyLabel, periodLabel, getIndividualStreak } from '../utils/habitUtils';
 import { getCategoryDef } from '../constants/categories';
 import { Colors, Spacing, Radius, Typography } from '../theme';
 import { Card } from './Card';
+import { StreakBadge } from './StreakBadge';
 
 interface HabitCardProps {
   habit: Habit;
@@ -24,6 +25,7 @@ export function HabitCard({ habit, onEdit, compact = false }: HabitCardProps) {
   const period = periodLabel(habit);
   const barColor = done ? Colors.success : Colors.primary;
   const catDef = habit.category ? getCategoryDef(habit.category) : null;
+  const streak = getIndividualStreak(habit, state.completions);
 
   function handleLog() {
     if (done) return;
@@ -82,7 +84,7 @@ export function HabitCard({ habit, onEdit, compact = false }: HabitCardProps) {
               </View>
             )}
           </View>
-          {/* Meta row: category pill + frequency */}
+          {/* Meta row: category pill + frequency + streak */}
           <View style={styles.meta}>
             {catDef && (
               <View style={[styles.catBadge, { backgroundColor: catDef.lightBg }]}>
@@ -93,6 +95,8 @@ export function HabitCard({ habit, onEdit, compact = false }: HabitCardProps) {
               </View>
             )}
             <Text style={styles.freq}>{frequencyLabel(habit)}</Text>
+            <View style={styles.metaDivider} />
+            <StreakBadge streak={streak} habit={habit} showUnit />
           </View>
         </View>
         <TouchableOpacity onPress={() => onEdit(habit)} style={styles.editBtn} hitSlop={8}>
@@ -173,6 +177,7 @@ const styles = StyleSheet.create({
   },
 
   meta: { flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' },
+  metaDivider: { width: 1, height: 10, backgroundColor: Colors.border },
   catBadge: {
     flexDirection: 'row',
     alignItems: 'center',

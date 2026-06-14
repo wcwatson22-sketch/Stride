@@ -19,12 +19,14 @@ import {
   getMotivationalLabel,
   getDueHabits,
   getHabitProgress,
+  getIndividualStreak,
   periodLabel,
   DueHabit,
 } from '../utils/habitUtils';
 import { getCategoryDef } from '../constants/categories';
 import { Card } from '../components/Card';
 import { HabitCard } from '../components/HabitCard';
+import { StreakBadge } from '../components/StreakBadge';
 import { Colors, Spacing, Typography, Radius } from '../theme';
 
 const PINNED_PREVIEW_COUNT = 2;
@@ -310,6 +312,7 @@ export function DashboardScreen() {
           {showDetails && (
             <ActionDetails
               dueHabits={dueHabits}
+              completions={completions}
               onComplete={(id) => logCompletion(id)}
             />
           )}
@@ -333,6 +336,7 @@ function PinnedHabitCard({ habit, completions, onComplete }: PinnedHabitCardProp
   const { completed, target, percentage, done } = getHabitProgress(habit, completions);
   const period = periodLabel(habit);
   const catDef = habit.category ? getCategoryDef(habit.category) : null;
+  const streak = getIndividualStreak(habit, completions);
 
   return (
     <Card
@@ -357,6 +361,8 @@ function PinnedHabitCard({ habit, completions, onComplete }: PinnedHabitCardProp
             <Text style={pinnedStyles.progressText}>
               {completed}/{target} {period}
             </Text>
+            <View style={pinnedStyles.metaDivider} />
+            <StreakBadge streak={streak} habit={habit} />
           </View>
           <View style={pinnedStyles.barTrack}>
             <View
@@ -439,10 +445,11 @@ function ActionsAggregate({ todayStats, remaining, onViewHabits }: ActionsAggreg
 
 interface ActionDetailsProps {
   dueHabits: DueHabit[];
+  completions: ReturnType<typeof useHabits>['state']['completions'];
   onComplete: (id: string) => void;
 }
 
-function ActionDetails({ dueHabits, onComplete }: ActionDetailsProps) {
+function ActionDetails({ dueHabits, completions, onComplete }: ActionDetailsProps) {
   if (dueHabits.length === 0) {
     return (
       <View style={detailStyles.caughtUpRow}>
@@ -457,6 +464,7 @@ function ActionDetails({ dueHabits, onComplete }: ActionDetailsProps) {
         <DueHabitRow
           key={item.habit.id}
           item={item}
+          completions={completions}
           onComplete={() => onComplete(item.habit.id)}
         />
       ))}
@@ -466,13 +474,15 @@ function ActionDetails({ dueHabits, onComplete }: ActionDetailsProps) {
 
 interface DueHabitRowProps {
   item: DueHabit;
+  completions: ReturnType<typeof useHabits>['state']['completions'];
   onComplete: () => void;
 }
 
-function DueHabitRow({ item, onComplete }: DueHabitRowProps) {
+function DueHabitRow({ item, completions, onComplete }: DueHabitRowProps) {
   const { habit, completed, target, period } = item;
   const pct = Math.min(1, completed / Math.max(1, target));
   const catDef = habit.category ? getCategoryDef(habit.category) : null;
+  const streak = getIndividualStreak(habit, completions);
 
   return (
     <View style={dueStyles.row}>
@@ -480,6 +490,9 @@ function DueHabitRow({ item, onComplete }: DueHabitRowProps) {
         <View style={dueStyles.nameRow}>
           {catDef && <View style={[dueStyles.dot, { backgroundColor: catDef.color }]} />}
           <Text style={dueStyles.name} numberOfLines={1}>{habit.name}</Text>
+          <View style={dueStyles.nameStreak}>
+            <StreakBadge streak={streak} habit={habit} />
+          </View>
         </View>
         <View style={dueStyles.barTrack}>
           <View
@@ -531,6 +544,7 @@ const pinnedStyles = StyleSheet.create({
   dot: { width: 8, height: 8, borderRadius: 4, flexShrink: 0 },
   name: { ...Typography.body, fontWeight: '600' as const, flexShrink: 1 },
   metaRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 },
+  metaDivider: { width: 1, height: 10, backgroundColor: Colors.border },
   catLabel: { fontSize: 11, fontWeight: '600' as const },
   progressText: { ...Typography.bodySmall },
   barTrack: {
@@ -592,6 +606,7 @@ const dueStyles = StyleSheet.create({
   },
   info: { flex: 1, gap: 4 },
   nameRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  nameStreak: { marginLeft: 'auto' as const },
   dot: { width: 7, height: 7, borderRadius: 3.5, flexShrink: 0 },
   name: { ...Typography.body, fontWeight: '500' as const, flexShrink: 1 },
   barTrack: {

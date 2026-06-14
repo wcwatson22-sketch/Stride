@@ -176,6 +176,58 @@ export function getMotivationalLabel(consistency: number): string {
   return 'Start Today';
 }
 
+/**
+ * Returns a date that falls inside the period immediately before the one
+ * that contains `date`. Used to walk backwards through consecutive periods.
+ */
+function getPreviousPeriodDate(habit: Habit, date: Date): Date {
+  // Step back 1 ms from the start of the current period → lands in previous period
+  return new Date(getPeriodStart(habit, date).getTime() - 1);
+}
+
+/**
+ * Current streak for a single habit.
+ *
+ * Rules:
+ * - If the current period is complete (completed >= target), it counts and we
+ *   walk backwards through prior periods.
+ * - If the current period is incomplete, we skip it and start the count from
+ *   the previous period (so an in-progress day/week/month never breaks an
+ *   existing streak).
+ * - A period only counts if completed >= target AND target > 0.
+ * - Zero completions for this habit → streak is 0.
+ */
+export function getIndividualStreak(
+  habit: Habit,
+  completions: HabitCompletion[],
+  now: Date = new Date()
+): number {
+  const target = Math.max(1, habit.targetCount);
+
+  // Fast exit: no completions at all for this habit
+  if (!completions.some((c) => c.habitId === habit.id)) return 0;
+
+  // Decide whether to start counting from the current period or the previous one
+  const currentCount = getCompletedCountForPeriod(habit, completions, now);
+  const currentDone = currentCount >= target;
+
+  // checkDate is a date that falls inside the period we're evaluating
+  let checkDate = currentDone ? now : getPreviousPeriodDate(habit, now);
+  let streak = 0;
+
+  for (let i = 0; i < 365; i++) {
+    const count = getCompletedCountForPeriod(habit, completions, checkDate);
+    if (count >= target) {
+      streak++;
+      checkDate = getPreviousPeriodDate(habit, checkDate);
+    } else {
+      break;
+    }
+  }
+
+  return streak;
+}
+
 /** Human-readable period label for a habit's frequency. */
 export function periodLabel(habit: Habit): string {
   switch (habit.frequencyType) {
