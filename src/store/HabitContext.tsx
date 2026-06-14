@@ -23,6 +23,7 @@ type Action =
   | { type: 'UPDATE_HABIT'; payload: Habit }
   | { type: 'DELETE_HABIT'; payload: string }
   | { type: 'ADD_COMPLETION'; payload: HabitCompletion }
+  | { type: 'REMOVE_COMPLETION'; payload: string }   // completion id
   | { type: 'UPDATE_SETTINGS'; payload: Partial<AppSettings> };
 
 function reducer(state: State, action: Action): State {
@@ -46,6 +47,8 @@ function reducer(state: State, action: Action): State {
       };
     case 'ADD_COMPLETION':
       return { ...state, completions: [...state.completions, action.payload] };
+    case 'REMOVE_COMPLETION':
+      return { ...state, completions: state.completions.filter((c) => c.id !== action.payload) };
     case 'UPDATE_SETTINGS':
       return { ...state, settings: { ...state.settings, ...action.payload } };
     default:
@@ -65,7 +68,8 @@ interface ContextValue {
   addHabit: (habit: Omit<Habit, 'id' | 'createdAt' | 'updatedAt'>) => void;
   updateHabit: (habit: Habit) => void;
   deleteHabit: (id: string) => void;
-  logCompletion: (habitId: string, count?: number, note?: string) => void;
+  logCompletion: (habitId: string, count?: number, note?: string) => string;
+  removeCompletion: (completionId: string) => void;
   updateSettings: (settings: Partial<AppSettings>) => void;
 }
 
@@ -140,19 +144,18 @@ export function HabitProvider({ children }: { children: React.ReactNode }) {
     dispatch({ type: 'DELETE_HABIT', payload: id });
   }
 
-  function logCompletion(habitId: string, count = 1, note = '') {
+  function logCompletion(habitId: string, count = 1, note = ''): string {
+    const id = generateId();
     const now = new Date().toISOString();
     dispatch({
       type: 'ADD_COMPLETION',
-      payload: {
-        id: generateId(),
-        habitId,
-        completedAt: now,
-        count,
-        note,
-        createdAt: now,
-      },
+      payload: { id, habitId, completedAt: now, count, note, createdAt: now },
     });
+    return id;
+  }
+
+  function removeCompletion(completionId: string) {
+    dispatch({ type: 'REMOVE_COMPLETION', payload: completionId });
   }
 
   function updateSettings(settings: Partial<AppSettings>) {
@@ -161,7 +164,7 @@ export function HabitProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <HabitContext.Provider
-      value={{ state, addHabit, updateHabit, deleteHabit, logCompletion, updateSettings }}
+      value={{ state, addHabit, updateHabit, deleteHabit, logCompletion, removeCompletion, updateSettings }}
     >
       {children}
     </HabitContext.Provider>
