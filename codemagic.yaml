@@ -69,26 +69,12 @@ workflows:
             --workspace "ios/Stride.xcworkspace" \
             --scheme "$XCODE_SCHEME"
 
-      - name: Upload to TestFlight
-        script: |
-          mkdir -p ~/.private_keys
-          echo "$ASC_PRIVATE_KEY_B64" | base64 --decode > ~/.private_keys/AuthKey_${ASC_KEY_ID}.p8 2>/dev/null \
-            || echo "$ASC_PRIVATE_KEY_B64" | base64 -D > ~/.private_keys/AuthKey_${ASC_KEY_ID}.p8
-          chmod 600 ~/.private_keys/AuthKey_${ASC_KEY_ID}.p8
-
-          if [ ! -s ~/.private_keys/AuthKey_${ASC_KEY_ID}.p8 ]; then
-            echo "ERROR: AuthKey file is empty — check ASC_PRIVATE_KEY_B64 env var"
-            exit 1
-          fi
-
-          IPA_PATH=$(find build/ios/ipa -name "*.ipa" | head -1)
-          echo "Uploading: $IPA_PATH"
-
-          xcrun altool --upload-app \
-            --type ios \
-            --file "$IPA_PATH" \
-            --apiKey "$ASC_KEY_ID" \
-            --apiIssuer "$ASC_ISSUER_ID"
+    publishing:
+      app_store_connect:
+        api_key: $ASC_PRIVATE_KEY
+        key_id: $ASC_KEY_ID
+        issuer_id: $ASC_ISSUER_ID
+        submit_to_testflight: true
 
     artifacts:
       - build/ios/ipa/*.ipa
