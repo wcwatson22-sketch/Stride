@@ -69,6 +69,18 @@ workflows:
             --workspace "ios/Stride.xcworkspace" \
             --scheme "$XCODE_SCHEME"
 
+      - name: Debug ASC env vars
+        script: |
+          echo "=== ASC env var diagnostic ==="
+          echo "ASC_KEY_ID='${ASC_KEY_ID}'"
+          echo "ASC_ISSUER_ID='${ASC_ISSUER_ID}'"
+          echo "APP_STORE_CONNECT_PUBLISHER_PRIVATE_KEY length: ${#APP_STORE_CONNECT_PUBLISHER_PRIVATE_KEY}"
+          echo "ASC_PRIVATE_KEY length: ${#ASC_PRIVATE_KEY}"
+          echo "First char codes:"
+          printf '%s' "$APP_STORE_CONNECT_PUBLISHER_PRIVATE_KEY" | head -1 | cat -A || true
+          echo "All env vars containing 'ASC' or 'PRIVATE':"
+          env | grep -i -E '(asc|private)' | sed 's/=.*/=<REDACTED>/' || true
+
       - name: Upload to TestFlight
         script: |
           mkdir -p ~/.private_keys
