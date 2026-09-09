@@ -10,10 +10,12 @@ workflows:
       ios_signing:
         distribution_type: app_store
         bundle_identifier: com.strideapp.habittracker
+      groups:
+        - asc_credentials
       vars:
         XCODE_SCHEME: Stride
-        # ASC_KEY_ID, ASC_ISSUER_ID, ASC_PRIVATE_KEY_B64 are set in
-        # Codemagic → Environment variables (encrypted) — never commit them here
+        ASC_KEY_ID: DH6MB8P2QX
+        ASC_ISSUER_ID: 55a91748-0078-45c8-ae86-f98d86a83c88
       node: 22.13.0
       xcode: latest
 
