@@ -73,14 +73,14 @@ workflows:
         script: |
           mkdir -p ~/.private_keys
           # Write PEM directly, stripping any Windows CRLF line endings
-          printf '%s' "$ASC_PRIVATE_KEY" | tr -d '\r' > ~/.private_keys/AuthKey_${ASC_KEY_ID}.p8
+          printf '%s' "$APP_STORE_CONNECT_PUBLISHER_PRIVATE_KEY" | tr -d '\r' > ~/.private_keys/AuthKey_${ASC_KEY_ID}.p8
           chmod 600 ~/.private_keys/AuthKey_${ASC_KEY_ID}.p8
 
           echo "Key file: $(wc -c < ~/.private_keys/AuthKey_${ASC_KEY_ID}.p8) bytes"
           head -1 ~/.private_keys/AuthKey_${ASC_KEY_ID}.p8
 
           if [ ! -s ~/.private_keys/AuthKey_${ASC_KEY_ID}.p8 ]; then
-            echo "ERROR: AuthKey file is empty — check ASC_PRIVATE_KEY env var"
+            echo "ERROR: AuthKey file is empty — check APP_STORE_CONNECT_PUBLISHER_PRIVATE_KEY env var"
             exit 1
           fi
 
