@@ -11,7 +11,7 @@ workflows:
         distribution_type: app_store
         bundle_identifier: com.strideapp.habittracker
       groups:
-        - asc_credentials
+        - Secure
       vars:
         XCODE_SCHEME: Stride
         ASC_KEY_ID: DH6MB8P2QX
